@@ -37,6 +37,7 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY pyproject.toml uv.lock setup.py README.md ./
 COPY build_support/ build_support/
+COPY bot/ bot/
 COPY crates/ crates/
 COPY openviking/ openviking/
 COPY openviking_cli/ openviking_cli/
@@ -50,13 +51,13 @@ COPY third_party/ third_party/
 RUN --mount=type=cache,target=/root/.cache/uv,id=uv-${TARGETPLATFORM} \
     case "${UV_LOCK_STRATEGY}" in \
         locked) \
-            uv sync --locked --no-editable \
+            uv sync --locked --no-editable --extra bot \
             ;; \
         auto) \
             if ! uv lock --check; then \
                 uv lock; \
             fi; \
-            uv sync --locked --no-editable \
+            uv sync --locked --no-editable --extra bot \
             ;; \
         *) \
             echo "Unsupported UV_LOCK_STRATEGY: ${UV_LOCK_STRATEGY}" >&2; \
@@ -76,14 +77,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY --from=py-builder /app/.venv /app/.venv
+COPY docker/openviking-console-entrypoint.sh /usr/local/bin/openviking-console-entrypoint
+RUN chmod +x /usr/local/bin/openviking-console-entrypoint
 ENV PATH="/app/.venv/bin:$PATH"
 ENV OPENVIKING_CONFIG_FILE="/app/ov.conf"
 
-EXPOSE 1933
+EXPOSE 1933 8020
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS http://127.0.0.1:1933/health || exit 1
 
-# Default runs server; override command to run CLI, e.g.:
+# Default runs server + console; override command to run CLI, e.g.:
 # docker run --rm <image> -v "$HOME/.openviking/ovcli.conf:/root/.openviking/ovcli.conf" openviking --help
-CMD ["openviking-server"]
+ENTRYPOINT ["openviking-console-entrypoint"]
