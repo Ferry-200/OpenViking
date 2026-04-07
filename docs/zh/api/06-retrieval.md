@@ -52,6 +52,7 @@ class MatchedContext:
     category: str                    # 分类
     score: float                     # 相关性分数 (0-1)
     match_reason: str                # 匹配原因
+    tags: Optional[str]              # 标签（以逗号分隔，如果有）
     relations: List[RelatedContext]  # 关联上下文
 ```
 

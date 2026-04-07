@@ -52,6 +52,7 @@ class MatchedContext:
     category: str                    # Category
     score: float                     # Relevance score (0-1)
     match_reason: str                # Why this matched
+    tags: Optional[str]              # Comma-separated tags (if any)
     relations: List[RelatedContext]  # Related contexts
 ```
 
