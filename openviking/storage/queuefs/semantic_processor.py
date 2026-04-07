@@ -3,6 +3,7 @@
 """SemanticProcessor: Processes messages from SemanticQueue, generates .abstract.md and .overview.md."""
 
 import asyncio
+import contextvars
 import json
 import threading
 from contextlib import nullcontext
@@ -86,9 +87,16 @@ class SemanticProcessor(DequeueHandlerBase):
         """
         self.max_concurrent_llm = max_concurrent_llm
         self._dag_executor: Optional[SemanticDagExecutor] = None
-        self._current_ctx = RequestContext(user=UserIdentifier.the_default_user(), role=Role.ROOT)
-        self._current_msg: Optional[SemanticMsg] = None
-        self._cached_resource_tags: Optional[str] = None
+        default_ctx = RequestContext(user=UserIdentifier.the_default_user(), role=Role.ROOT)
+        self._current_ctx_var: contextvars.ContextVar[RequestContext] = contextvars.ContextVar(
+            "semantic_processor_current_ctx", default=default_ctx
+        )
+        self._current_msg_var: contextvars.ContextVar[Optional[SemanticMsg]] = (
+            contextvars.ContextVar("semantic_processor_current_msg", default=None)
+        )
+        self._cached_resource_tags_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar("semantic_processor_cached_resource_tags", default=None)
+        )
         self._circuit_breaker = CircuitBreaker()
 
     @classmethod
@@ -240,6 +248,9 @@ class SemanticProcessor(DequeueHandlerBase):
         msg: Optional[SemanticMsg] = None
         collector = None
         release_lock_in_finally = True
+        msg_token = None
+        ctx_token = None
+        tags_token = None
         try:
             import json
 
@@ -264,11 +275,13 @@ class SemanticProcessor(DequeueHandlerBase):
             collector = resolve_telemetry(msg.telemetry_id)
             telemetry_ctx = bind_telemetry(collector) if collector is not None else nullcontext()
             with telemetry_ctx:
-                self._current_msg = msg
-                self._current_ctx = self._ctx_from_semantic_msg(msg)
+                current_ctx = self._ctx_from_semantic_msg(msg)
+                msg_token = self._current_msg_var.set(msg)
+                ctx_token = self._current_ctx_var.set(current_ctx)
 
                 # Cache resource tags at the start of the DAG to avoid redundant I/O.
-                self._cached_resource_tags = await self._read_resource_tags(msg.uri, self._current_ctx)
+                cached_tags = await self._read_resource_tags(msg.uri, current_ctx)
+                tags_token = self._cached_resource_tags_var.set(cached_tags)
 
                 logger.info(
                     f"Processing semantic generation for: {msg.uri} (recursive={msg.recursive})"
@@ -282,9 +295,7 @@ class SemanticProcessor(DequeueHandlerBase):
                     is_incremental = False
                     viking_fs = get_viking_fs()
                     if msg.target_uri:
-                        target_exists = await viking_fs.exists(
-                            msg.target_uri, ctx=self._current_ctx
-                        )
+                        target_exists = await viking_fs.exists(msg.target_uri, ctx=current_ctx)
                         # Check if target URI exists and is not the same as the source URI（避免重复处理）
                         if target_exists and msg.uri != msg.target_uri:
                             is_incremental = True
@@ -297,14 +308,14 @@ class SemanticProcessor(DequeueHandlerBase):
                         lock_uri = msg.target_uri or msg.uri
                         msg.lifecycle_lock_handle_id = await self._ensure_lifecycle_lock(
                             msg.lifecycle_lock_handle_id,
-                            viking_fs._uri_to_path(lock_uri, ctx=self._current_ctx),
+                            viking_fs._uri_to_path(lock_uri, ctx=current_ctx),
                         )
 
                     executor = SemanticDagExecutor(
                         processor=self,
                         context_type=msg.context_type,
                         max_concurrent_llm=self.max_concurrent_llm,
-                        ctx=self._current_ctx,
+                        ctx=current_ctx,
                         incremental_update=is_incremental,
                         target_uri=msg.target_uri,
                         semantic_msg_id=msg.id,
@@ -375,9 +386,12 @@ class SemanticProcessor(DequeueHandlerBase):
                         )
                 except Exception:
                     pass
-            self._current_msg = None
-            self._current_ctx = None
-            self._cached_resource_tags = None
+            if tags_token is not None:
+                self._cached_resource_tags_var.reset(tags_token)
+            if ctx_token is not None:
+                self._current_ctx_var.reset(ctx_token)
+            if msg_token is not None:
+                self._current_msg_var.reset(msg_token)
 
     def get_dag_stats(self) -> Optional["DagStats"]:
         if not self._dag_executor:
@@ -416,7 +430,7 @@ class SemanticProcessor(DequeueHandlerBase):
         """
         viking_fs = get_viking_fs()
         dir_uri = msg.uri
-        ctx = self._current_ctx
+        ctx = self._current_ctx_var.get()
         llm_sem = asyncio.Semaphore(self.max_concurrent_llm)
 
         try:
@@ -780,7 +794,7 @@ class SemanticProcessor(DequeueHandlerBase):
         """Generate summary for a single text file (code, documentation, or other text)."""
         viking_fs = get_viking_fs()
         vlm = get_openviking_config().vlm
-        active_ctx = ctx or self._current_ctx
+        active_ctx = ctx or self._current_ctx_var.get()
 
         content = await viking_fs.read_file(file_path, ctx=active_ctx)
         if isinstance(content, bytes):
@@ -1248,15 +1262,16 @@ class SemanticProcessor(DequeueHandlerBase):
     ) -> None:
         """Create directory Context and enqueue to EmbeddingQueue."""
 
-        if self._current_msg and getattr(self._current_msg, "skip_vectorization", False):
+        current_msg = self._current_msg_var.get()
+        if current_msg and getattr(current_msg, "skip_vectorization", False):
             logger.info(f"Skipping vectorization for {uri} (requested via SemanticMsg)")
             return
 
         from openviking.utils.embedding_utils import vectorize_directory_meta
 
-        active_ctx = ctx or self._current_ctx
+        active_ctx = ctx or self._current_ctx_var.get()
         # Use cached tags if available, otherwise fallback to reading from .meta.json
-        tags = self._cached_resource_tags
+        tags = self._cached_resource_tags_var.get()
         if tags is None:
             tags = await self._read_resource_tags(uri, active_ctx)
 
@@ -1283,9 +1298,9 @@ class SemanticProcessor(DequeueHandlerBase):
         """Vectorize a single file using its content or summary."""
         from openviking.utils.embedding_utils import vectorize_file
 
-        active_ctx = ctx or self._current_ctx
+        active_ctx = ctx or self._current_ctx_var.get()
         # Use cached tags if available, otherwise fallback to reading from .meta.json
-        tags = self._cached_resource_tags
+        tags = self._cached_resource_tags_var.get()
         if tags is None:
             tags = await self._read_resource_tags(file_path, active_ctx)
 
@@ -1303,7 +1318,11 @@ class SemanticProcessor(DequeueHandlerBase):
     @staticmethod
     def _resource_root_uri_from(uri: str) -> Optional[str]:
         """Return `viking://resources/<name>` for a resource URI, else None."""
-        parts = uri.rstrip("/").split("/")
+        try:
+            normalized = VikingURI.normalize(uri)
+        except Exception:
+            return None
+        parts = normalized.rstrip("/").split("/")
         if (
             len(parts) >= 4
             and parts[0] == "viking:"
