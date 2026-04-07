@@ -633,7 +633,11 @@ class VikingFS:
     @staticmethod
     def _is_resource_root_uri(uri: str) -> bool:
         """Return True if URI is exactly viking://resources/<resource_name>."""
-        parts = uri.rstrip("/").split("/")
+        try:
+            normalized = VikingURI.normalize(uri)
+        except Exception:
+            return False
+        parts = normalized.rstrip("/").split("/")
         return (
             len(parts) == 4
             and parts[0] == "viking:"

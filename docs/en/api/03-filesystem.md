@@ -255,7 +255,7 @@ List directory contents.
     "isDir": True,            # True if directory
     "uri": "viking://resources/docs/",  # Viking URI
     "meta": {},               # Optional metadata
-    "tags": "guide,api"       # Tags (if it's a resource root and has tags in .meta.json)
+    "tags": "guide,api"       # Tags (for display only. Filtering is supported in find/search)
 }
 ```
 
