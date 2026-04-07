@@ -117,6 +117,7 @@ class ResourceService:
         skip_watch_management: bool = False,
         allow_local_path_resolution: bool = True,
         enforce_public_remote_targets: bool = False,
+        tags: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """Add resource to OpenViking (only supports resources scope).
@@ -205,6 +206,7 @@ class ResourceService:
                 build_index=build_index,
                 summarize=summarize,
                 allow_local_path_resolution=allow_local_path_resolution,
+                tags=tags,
                 **kwargs,
             )
 

@@ -135,6 +135,7 @@ async def vectorize_directory_meta(
     context_type: str = "resource",
     ctx: Optional[RequestContext] = None,
     semantic_msg_id: Optional[str] = None,
+    tags: Optional[str] = None,
 ) -> None:
     """
     Vectorize directory metadata (.abstract.md and .overview.md).
@@ -165,6 +166,8 @@ async def vectorize_directory_meta(
             account_id=ctx.account_id,
             owner_space=owner_space,
         )
+        if tags:
+            context_abstract.meta["tags"] = tags
         context_abstract.set_vectorize(Vectorize(text=abstract))
         msg_abstract = EmbeddingMsgConverter.from_context(context_abstract)
         if msg_abstract:
@@ -191,6 +194,8 @@ async def vectorize_directory_meta(
             account_id=ctx.account_id,
             owner_space=owner_space,
         )
+        if tags:
+            context_overview.meta["tags"] = tags
         context_overview.set_vectorize(Vectorize(text=overview))
         msg_overview = EmbeddingMsgConverter.from_context(context_overview)
         if msg_overview:
@@ -216,6 +221,7 @@ async def vectorize_file(
     ctx: Optional[RequestContext] = None,
     semantic_msg_id: Optional[str] = None,
     use_summary: bool = False,
+    tags: Optional[str] = None,
 ) -> None:
     """
     Vectorize a single file.
@@ -249,6 +255,8 @@ async def vectorize_file(
             account_id=ctx.account_id,
             owner_space=_owner_space_for_uri(file_path, ctx),
         )
+        if tags:
+            context.meta["tags"] = tags
 
         content_type = get_resource_content_type(file_name)
         embedding_cfg = get_openviking_config().embedding
