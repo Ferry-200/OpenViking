@@ -184,7 +184,10 @@ class TreeBuilder:
         # Create a minimal Context object for the root so that tree.root is not None
         root_context = Context(uri=final_uri, temp_uri=temp_doc_uri)
         if tags:
-            root_context.meta["tags"] = tags
+            tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+            tag_list = list(dict.fromkeys(tag_list))
+            if tag_list:
+                root_context.meta["tags"] = ",".join(tag_list)
         tree.add_context(root_context)
 
         return tree
