@@ -108,8 +108,11 @@ EOF
 show_main_menu() {
     clear_screen
     print_header
-    
-    cat << 'EOF'
+
+    local fast_mode_label="ON"
+    [[ "$FAST_MODE" != "1" ]] && fast_mode_label="OFF"
+
+    cat << EOF
 Select installation profile:
 
   [1] Full install: Python + web-studio + ov CLI (recommended)
@@ -118,9 +121,10 @@ Select installation profile:
   [4] Web-studio only
   [5] ov CLI only
   [6] Exit
+  [7] Toggle Fast Mode (current: $fast_mode_label)
 
 EOF
-    read -p "Enter choice [1-6]: " -r MAIN_CHOICE
+    read -p "Enter choice [1-7]: " -r MAIN_CHOICE
 }
 
 show_custom_menu() {
@@ -132,12 +136,14 @@ show_custom_menu() {
     local web_status="INSTALL"
     local web_install_disp="with dependencies"
     local ov_status="INSTALL"
+    local fast_mode_label="ON"
     
     [[ "$SKIP_PYTHON" == "1" ]] && py_status="SKIP"
     [[ "$SKIP_PYTHON" != "1" ]] && py_extras_disp=" (extras: $PYTHON_EXTRAS)"
     [[ "$SKIP_WEB" == "1" ]] && web_status="SKIP"
     [[ "$SKIP_WEB_INSTALL" == "1" ]] && web_install_disp="dependencies only, skip install"
     [[ "$SKIP_OV" == "1" ]] && ov_status="SKIP"
+    [[ "$FAST_MODE" != "1" ]] && fast_mode_label="OFF"
     
     cat << EOF
 Custom Configuration:
@@ -152,9 +158,10 @@ Custom Configuration:
   [4] Configure Python extras
   [5] Start installation
   [6] Back to main menu
+  [7] Toggle Fast Mode (current: $fast_mode_label)
 
 EOF
-    read -p "Enter choice [1-6]: " -r CUSTOM_CHOICE
+    read -p "Enter choice [1-7]: " -r CUSTOM_CHOICE
 }
 
 show_extras_menu() {
@@ -195,12 +202,21 @@ run_python_install() {
     
     log_info "Installing Python package: $spec"
     cd "$ROOT_DIR"
-    
-    # shellcheck disable=SC2086
-    $pip_cmd -e "$spec" --force-reinstall || {
-        log_error "Python installation failed"
-        return 1
-    }
+
+    if [[ "$FAST_MODE" == "1" ]]; then
+        log_info "FAST_MODE=1: install editable package without --force-reinstall"
+        # shellcheck disable=SC2086
+        $pip_cmd -e "$spec" || {
+            log_error "Python installation failed"
+            return 1
+        }
+    else
+        # shellcheck disable=SC2086
+        $pip_cmd -e "$spec" --force-reinstall || {
+            log_error "Python installation failed"
+            return 1
+        }
+    fi
     
     log_ok "Python installation completed"
 }
@@ -235,16 +251,24 @@ run_ov_install() {
         log_error "Cargo not found. Install Rust from: https://rustup.rs/"
         return 1
     fi
-    
-    log_info "Installing ov CLI..."
+
     cd "$ROOT_DIR"
-    
-    cargo install --path crates/ov_cli --force || {
-        log_error "ov CLI installation failed"
-        return 1
-    }
-    
-    log_ok "ov CLI installation completed"
+
+    if [[ "$FAST_MODE" == "1" ]]; then
+        log_info "FAST_MODE=1: building ov CLI incrementally (cargo build -p ov_cli)"
+        cargo build -p ov_cli || {
+            log_error "ov CLI build failed"
+            return 1
+        }
+        log_ok "ov CLI build completed (binary: target/debug/ov)"
+    else
+        log_info "Installing ov CLI globally..."
+        cargo install --path crates/ov_cli --force || {
+            log_error "ov CLI installation failed"
+            return 1
+        }
+        log_ok "ov CLI installation completed"
+    fi
 }
 
 # ============================================================================
@@ -362,7 +386,11 @@ show_completion() {
     fi
     
     if [[ "$SKIP_OV" != "1" ]]; then
-        echo "  • Check ov CLI: ov --help"
+        if [[ "$FAST_MODE" == "1" ]]; then
+            echo "  • Check ov CLI dev binary: ./target/debug/ov --help"
+        else
+            echo "  • Check ov CLI: ov --help"
+        fi
     fi
     
     echo "  • Docs: https://openviking.ai/docs"
@@ -372,6 +400,17 @@ show_completion() {
 # ============================================================================
 # Menu Handlers
 # ============================================================================
+
+toggle_fast_mode() {
+    if [[ "$FAST_MODE" == "1" ]]; then
+        FAST_MODE="0"
+        log_info "Fast mode disabled: use full reinstall/install behavior"
+    else
+        FAST_MODE="1"
+        log_info "Fast mode enabled: prefer incremental dev builds"
+    fi
+    sleep 1
+}
 
 handle_main_menu() {
     case "$MAIN_CHOICE" in
@@ -405,6 +444,12 @@ handle_main_menu() {
         6)
             log_info "Exiting"
             exit 0
+            ;;
+        7)
+            toggle_fast_mode
+            show_main_menu
+            handle_main_menu
+            return $?
             ;;
         *)
             log_error "Invalid choice"
@@ -450,6 +495,10 @@ handle_custom_menu() {
             ;;
         6)
             return 1  # back to main menu
+            ;;
+        7)
+            toggle_fast_mode
+            handle_custom_menu
             ;;
         *)
             log_error "Invalid choice"
@@ -499,6 +548,7 @@ main() {
     SKIP_OV="0"
     SKIP_WEB_INSTALL="0"
     PYTHON_EXTRAS="bot-full"
+    FAST_MODE="${OV_BOOTSTRAP_FAST:-1}"
     
     # Check if terminal
     if [[ ! -t 0 ]]; then
@@ -506,25 +556,33 @@ main() {
         exit 1
     fi
     
-    # Verify prerequisites early
-    verify_prerequisites || exit 1
-    
+    if [[ "$FAST_MODE" == "1" ]]; then
+        log_info "FAST_MODE enabled (OV_BOOTSTRAP_FAST=1): prefer incremental dev builds"
+    else
+        log_info "FAST_MODE disabled (OV_BOOTSTRAP_FAST=0): force full reinstall/install"
+    fi
+
     # Main loop
     while true; do
         show_main_menu
         
-        handle_main_menu
-        ret=$?
+        ret=0
+        handle_main_menu || ret=$?
         
         if [[ $ret -eq 2 ]]; then
             # Custom menu
-            handle_custom_menu
-            ret=$?
+            ret=0
+            handle_custom_menu || ret=$?
             [[ $ret -eq 1 ]] && continue  # back to main
         fi
         
         if [[ $ret -eq 0 ]]; then
-            break  # proceed to install
+            # Verify prerequisites after profile/custom selection so SKIP flags take effect.
+            if verify_prerequisites; then
+                break  # proceed to install
+            fi
+            log_warn "Prerequisite check failed for selected profile. Please adjust selection or install missing tools."
+            sleep 1
         fi
     done
     
