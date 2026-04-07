@@ -478,6 +478,43 @@ impl HttpClient {
 
     // ============ Search Methods ============
 
+    fn build_tags_filter(tags: &str) -> Result<Value> {
+        let mut tag_list: Vec<&str> = tags
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let mut seen = HashSet::new();
+        tag_list.retain(|s| seen.insert(*s));
+
+        if tag_list.is_empty() {
+            return Err(Error::Client(
+                "'tags' must contain at least one non-empty tag".to_string(),
+            ));
+        }
+
+        let conds: Vec<Value> = tag_list
+            .into_iter()
+            .map(|s| {
+                serde_json::json!({
+                    "op": "contains",
+                    "field": "tags",
+                    "substring": s
+                })
+            })
+            .collect();
+
+        Ok(if conds.len() == 1 {
+            conds[0].clone()
+        } else {
+            serde_json::json!({
+                "op": "and",
+                "conds": conds
+            })
+        })
+    }
+
     pub async fn find(
         &self,
         query: String,
@@ -494,34 +531,8 @@ impl HttpClient {
             body_map.insert("score_threshold".to_string(), serde_json::json!(t));
         }
         if let Some(t) = tags {
-            let mut tag_list: Vec<&str> = t
-                .split(',')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect();
-            let mut seen = HashSet::new();
-            tag_list.retain(|s| seen.insert(*s));
-            if !tag_list.is_empty() {
-                let conds: Vec<_> = tag_list
-                    .into_iter()
-                    .map(|s| {
-                        serde_json::json!({
-                            "op": "contains",
-                            "field": "tags",
-                            "substring": s
-                        })
-                    })
-                    .collect();
-                let filter = if conds.len() == 1 {
-                    conds[0].clone()
-                } else {
-                    serde_json::json!({
-                        "op": "and",
-                        "conds": conds
-                    })
-                };
-                body_map.insert("filter".to_string(), filter);
-            }
+            let filter = Self::build_tags_filter(&t)?;
+            body_map.insert("filter".to_string(), filter);
         }
         self.post("/api/v1/search/find", &serde_json::Value::Object(body_map)).await
     }
@@ -546,34 +557,8 @@ impl HttpClient {
             body_map.insert("score_threshold".to_string(), serde_json::json!(t));
         }
         if let Some(t) = tags {
-            let mut tag_list: Vec<&str> = t
-                .split(',')
-                .map(|s| s.trim())
-                .filter(|s| !s.is_empty())
-                .collect();
-            let mut seen = HashSet::new();
-            tag_list.retain(|s| seen.insert(*s));
-            if !tag_list.is_empty() {
-                let conds: Vec<_> = tag_list
-                    .into_iter()
-                    .map(|s| {
-                        serde_json::json!({
-                            "op": "contains",
-                            "field": "tags",
-                            "substring": s
-                        })
-                    })
-                    .collect();
-                let filter = if conds.len() == 1 {
-                    conds[0].clone()
-                } else {
-                    serde_json::json!({
-                        "op": "and",
-                        "conds": conds
-                    })
-                };
-                body_map.insert("filter".to_string(), filter);
-            }
+            let filter = Self::build_tags_filter(&t)?;
+            body_map.insert("filter".to_string(), filter);
         }
         self.post("/api/v1/search/search", &serde_json::Value::Object(body_map)).await
     }

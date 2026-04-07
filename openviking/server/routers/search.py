@@ -5,7 +5,7 @@
 import math
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from openviking.server.auth import get_request_context
@@ -29,6 +29,30 @@ def _sanitize_floats(obj: Any) -> Any:
     return obj
 
 
+def _merge_filter_with_tags(
+    filter_expr: Optional[Dict[str, Any]], tags: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Merge top-level tags shortcut into metadata filter DSL."""
+    if tags is None:
+        return filter_expr
+    if filter_expr is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot specify both 'filter' and 'tags'",
+        )
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+    tag_list = list(dict.fromkeys(tag_list))
+    if not tag_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="'tags' must contain at least one non-empty tag",
+        )
+
+    conds = [{"op": "contains", "field": "tags", "substring": t} for t in tag_list]
+    return conds[0] if len(conds) == 1 else {"op": "and", "conds": conds}
+
+
 router = APIRouter(prefix="/api/v1/search", tags=["search"])
 
 
@@ -41,6 +65,7 @@ class FindRequest(BaseModel):
     node_limit: Optional[int] = None
     score_threshold: Optional[float] = None
     filter: Optional[Dict[str, Any]] = None
+    tags: Optional[str] = None
     include_provenance: bool = False
     telemetry: TelemetryRequest = False
 
@@ -55,6 +80,7 @@ class SearchRequest(BaseModel):
     node_limit: Optional[int] = None
     score_threshold: Optional[float] = None
     filter: Optional[Dict[str, Any]] = None
+    tags: Optional[str] = None
     include_provenance: bool = False
     telemetry: TelemetryRequest = False
 
@@ -85,6 +111,7 @@ async def find(
     """Semantic search without session context."""
     service = get_service()
     actual_limit = request.node_limit if request.node_limit is not None else request.limit
+    effective_filter = _merge_filter_with_tags(request.filter, request.tags)
     execution = await run_operation(
         operation="search.find",
         telemetry=request.telemetry,
@@ -94,7 +121,7 @@ async def find(
             target_uri=request.target_uri,
             limit=actual_limit,
             score_threshold=request.score_threshold,
-            filter=request.filter,
+            filter=effective_filter,
         ),
     )
     result = execution.result
@@ -122,6 +149,7 @@ async def search(
             session = service.sessions.session(_ctx, request.session_id)
             await session.load()
         actual_limit = request.node_limit if request.node_limit is not None else request.limit
+        effective_filter = _merge_filter_with_tags(request.filter, request.tags)
         return await service.search.search(
             query=request.query,
             ctx=_ctx,
@@ -129,7 +157,7 @@ async def search(
             session=session,
             limit=actual_limit,
             score_threshold=request.score_threshold,
-            filter=request.filter,
+            filter=effective_filter,
         )
 
     execution = await run_operation(

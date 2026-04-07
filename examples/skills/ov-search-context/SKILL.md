@@ -134,6 +134,22 @@ ov overview viking://resources/docs/api/
 ov read viking://resources/docs/api/.overview.md
 ```
 
+### Tag Filtering
+
+Filter resources and memories by tags using `--tags` (supported by `ls`, `tree`, `find`, `grep` and `glob`). When providing multiple tags separated by commas, the CLI uses **AND** logic (it must match all specified tags):
+
+```bash
+# Find resources containing the 'security' tag
+ov find "authentication" --tags "security"
+
+# Find resources containing BOTH 'auth' AND 'security' tags
+ov find "authentication" --tags "auth,security"
+
+# Filter directories and hierarchy by tags
+ov tree viking://resources --tags "important"
+ov ls viking://resources --tags "docs,api"
+```
+
 ### Combining Search
 
 Use search results to guide further actions:

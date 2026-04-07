@@ -47,9 +47,17 @@ ov add-resource /User/volcengine/Photo/Travels/2026/ --include "*.jpg,*.jpeg,*.p
 ov add-resource /User/volcengine/Documents/OV项目设计文档/
 ```
 
-### Context and Instructions (TBD)
+### Context, Instructions and Tags
 
-Add metadata to guide processing: --reason and --instruction will be supported in the future.
+Add metadata to guide processing and organizing:
+
+```bash
+# Add tags to resources for easier filtering later (comma-separated)
+ov add-resource ./docs --tags "documentation,api"
+ov add-resource https://example.com/docs --tags "web,reference"
+```
+
+> Note: `--reason` and `--instruction` will be supported in the future.
 
 ### Async Processing Control
 

@@ -268,28 +268,32 @@ class ResourceProcessor:
             # ============ Phase 3.6: Write .meta.json for resource metadata ============
             if tags and root_uri:
                 try:
-                    viking_fs = get_viking_fs()
-                    meta_uri = f"{root_uri.rstrip('/')}/.meta.json"
-                    meta_data: Dict[str, Any] = {}
-
-                    try:
-                        existing = await viking_fs.read(meta_uri, ctx=ctx)
-                        if isinstance(existing, bytes):
-                            existing = existing.decode("utf-8", errors="replace")
-                        loaded = json.loads(existing)
-                        if isinstance(loaded, dict):
-                            meta_data = loaded
-                    except Exception:
-                        # .meta.json may not exist yet; create a new one below.
-                        pass
-
                     # Sanitize tags: trim, remove empty, deduplicate
                     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
                     tag_list = list(dict.fromkeys(tag_list))
-                    meta_data["tags"] = ",".join(tag_list)
+                    if not tag_list:
+                        logger.warning(
+                            "[ResourceProcessor] Skip writing tags because sanitized tags are empty"
+                        )
+                    else:
+                        viking_fs = get_viking_fs()
+                        meta_uri = f"{root_uri.rstrip('/')}/.meta.json"
+                        meta_data: Dict[str, Any] = {}
 
-                    meta_content = json.dumps(meta_data, ensure_ascii=False)
-                    await viking_fs.write(meta_uri, meta_content, ctx=ctx)
+                        try:
+                            existing = await viking_fs.read(meta_uri, ctx=ctx)
+                            if isinstance(existing, bytes):
+                                existing = existing.decode("utf-8", errors="replace")
+                            loaded = json.loads(existing)
+                            if isinstance(loaded, dict):
+                                meta_data = loaded
+                        except Exception:
+                            # .meta.json may not exist yet; create a new one below.
+                            pass
+
+                        meta_data["tags"] = ",".join(tag_list)
+                        meta_content = json.dumps(meta_data, ensure_ascii=False)
+                        await viking_fs.write(meta_uri, meta_content, ctx=ctx)
                 except Exception as e:
                     logger.warning(f"[ResourceProcessor] Failed to write .meta.json: {e}")
 
