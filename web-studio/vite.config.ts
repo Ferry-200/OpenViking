@@ -15,6 +15,14 @@ const config = defineConfig({
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     viteReact(),
   ],
+  server: {
+    host: true,
+    allowedHosts: ['.up.railway.app'],
+  },
+  preview: {
+    host: true,
+    allowedHosts: ['.up.railway.app'],
+  },
 })
 
 export default config
