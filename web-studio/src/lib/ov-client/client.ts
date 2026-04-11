@@ -1,19 +1,16 @@
-import axios, { AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosHeaders } from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 import { createClient } from '#/gen/ov-client/client'
 import { client as sdkClient } from '#/gen/ov-client/client.gen'
 
 import { normalizeOvClientError, OvClientError } from './errors'
-import {
-  DEFAULT_API_KEY_STORAGE_KEY,
-  type OvClientAdapter,
-  type OvClientOptions,
-  type OvConnectionState,
-  type OvErrorEnvelope,
-} from './types'
+import { DEFAULT_API_KEY_STORAGE_KEY } from './types'
+import type { OvClientAdapter, OvClientOptions, OvConnectionState, OvErrorEnvelope } from './types'
 
 const DEFAULT_TELEMETRY_PATHS = new Set(['/api/v1/search/find', '/api/v1/resources'])
 const SESSION_COMMIT_PATH = /^\/api\/v1\/sessions\/[^/]+\/commit$/
+const WEB_STUDIO_AGENT_ID = 'web-studio'
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined'
@@ -106,7 +103,9 @@ function maybeInjectTelemetry(
   }
 }
 
-function isEnvelopeError(value: unknown): value is OvErrorEnvelope {
+function isEnvelopeError(
+  value: unknown,
+): value is OvErrorEnvelope & { error: NonNullable<OvErrorEnvelope['error']>; status: 'error' } {
   return isRecord(value) && value.status === 'error' && isRecord(value.error)
 }
 
@@ -122,7 +121,6 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
     apiKey: options.connection?.apiKey ?? readSessionStorage(runtimeOptions.apiKeyStorageKey),
     accountId: options.connection?.accountId ?? '',
     userId: options.connection?.userId ?? '',
-    agentId: options.connection?.agentId ?? '',
   }
 
   const instance = options.axios ?? axios.create()
@@ -135,7 +133,7 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
   })
 
   instance.interceptors.request.use((config) => {
-    const headers = AxiosHeaders.from(config.headers ?? defaultHeaders)
+    const headers = AxiosHeaders.from(config.headers)
 
     for (const [key, value] of Object.entries(defaultHeaders)) {
       headers.set(key, value)
@@ -144,7 +142,7 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
     setOptionalHeader(headers, 'X-API-Key', connection.apiKey)
     setOptionalHeader(headers, 'X-OpenViking-Account', connection.accountId)
     setOptionalHeader(headers, 'X-OpenViking-User', connection.userId)
-    setOptionalHeader(headers, 'X-OpenViking-Agent', connection.agentId)
+    headers.set('X-OpenViking-Agent', WEB_STUDIO_AGENT_ID)
 
     config.headers = headers
     maybeInjectTelemetry(config, runtimeOptions.defaultTelemetry)
@@ -157,10 +155,12 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
         return response
       }
 
+      const { error } = response.data
+
       throw new OvClientError({
-        code: response.data.error?.code || 'ERROR',
-        details: response.data.error?.details ?? response.data.error?.detail,
-        message: response.data.error?.message || 'OpenViking request failed',
+        code: error.code || 'ERROR',
+        details: error.details ?? error.detail,
+        message: error.message || 'OpenViking request failed',
         requestId:
           typeof response.headers['x-request-id'] === 'string'
             ? response.headers['x-request-id']
@@ -212,7 +212,6 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
       apiKey: '',
       accountId: '',
       userId: '',
-      agentId: '',
     }
     persistApiKey()
     return { ...connection }
@@ -225,7 +224,7 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
   function setOptions(next: Partial<typeof runtimeOptions>): Readonly<typeof runtimeOptions> {
     const previousStorageKey = runtimeOptions.apiKeyStorageKey
     runtimeOptions = {
-      apiKeyStorageKey: next.apiKeyStorageKey || runtimeOptions.apiKeyStorageKey,
+      apiKeyStorageKey: next.apiKeyStorageKey ?? runtimeOptions.apiKeyStorageKey,
       baseUrl: next.baseUrl !== undefined ? normalizeBaseUrl(next.baseUrl) : runtimeOptions.baseUrl,
       defaultTelemetry: next.defaultTelemetry ?? runtimeOptions.defaultTelemetry,
     }
