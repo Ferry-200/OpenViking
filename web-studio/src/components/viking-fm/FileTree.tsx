@@ -13,7 +13,6 @@ interface FileTreeProps {
 interface FileTreeItem {
   uri: string
   name: string
-  type: 'folder' | 'file'
 }
 
 interface TreeNodeProps {
@@ -42,12 +41,6 @@ const ChevronIcon = ({ isOpen }: { isOpen: boolean }) => (
   </svg>
 )
 
-const FileIcon = () => (
-  <svg className="mr-2 size-5 shrink-0 text-gray-500 dark:text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
-  </svg>
-)
-
 const LIST_OPTS = { output: 'agent' as const, showAllHidden: true, nodeLimit: 200 }
 
 function TreeNode({
@@ -59,29 +52,28 @@ function TreeNode({
   onSelectDirectory,
   prefetch,
 }: TreeNodeProps) {
-  const isFolder = item.type === 'folder'
   const isOpen = expandedKeys.has(item.uri)
   const isSelected = currentUri === item.uri
 
   const { data } = useVikingFsList(item.uri, LIST_OPTS)
-  const folderChildren: FileTreeItem[] = (data?.entries ?? [])
+  const children: FileTreeItem[] = (data?.entries ?? [])
     .filter((e: VikingFsEntry) => e.isDir)
-    .map((e: VikingFsEntry) => ({ uri: e.uri, name: e.name, type: 'folder' as const }))
+    .map((e: VikingFsEntry) => ({ uri: e.uri, name: e.name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const handleToggle = useCallback(() => {
-    if (!isFolder) return
     const next = new Set(expandedKeys)
     isOpen ? next.delete(item.uri) : next.add(item.uri)
     onExpandedKeysChange(next)
-  }, [expandedKeys, isFolder, isOpen, item.uri, onExpandedKeysChange])
+  }, [expandedKeys, isOpen, item.uri, onExpandedKeysChange])
 
   const handleSelect = useCallback(() => {
-    if (isFolder) onSelectDirectory(item.uri)
-  }, [isFolder, item.uri, onSelectDirectory])
+    onSelectDirectory(item.uri)
+  }, [item.uri, onSelectDirectory])
 
   const handleMouseEnter = useCallback(() => {
-    if (isFolder && !isOpen && prefetch) prefetch(item.uri)
-  }, [isFolder, isOpen, prefetch, item.uri])
+    if (!isOpen && prefetch) prefetch(item.uri)
+  }, [isOpen, prefetch, item.uri])
 
   return (
     <div className="relative text-gray-700 dark:text-gray-300">
@@ -91,20 +83,22 @@ function TreeNode({
           onClick={handleSelect} onMouseEnter={handleMouseEnter}>
           <div className="flex min-w-0 flex-grow items-center">
             <button type="button" className="inline-flex" onClick={(e) => { e.stopPropagation(); handleToggle() }} aria-label={isOpen ? '收起' : '展开'}>
-              {isFolder ? <ChevronIcon isOpen={isOpen} /> : <div className="w-4 shrink-0" />}
+              <ChevronIcon isOpen={isOpen} />
             </button>
             <div className="ml-1 flex min-w-0 items-center">
-              {isFolder ? <FolderIcon isOpen={isOpen} /> : <FileIcon />}
+              <FolderIcon isOpen={isOpen} />
               <span className="ml-1.5 truncate text-sm">{item.name}</span>
             </div>
           </div>
         </div>
       </div>
-      <div className={`relative overflow-hidden transition-all duration-300 ease-in-out ${isOpen ? 'max-h-[1000px]' : 'max-h-0'}`}>
-        {isOpen && !data && <div className="px-2 py-1 text-xs text-muted-foreground" style={{ marginLeft: `${(level + 1) * 16}px` }}>加载中...</div>}
-        {isOpen && folderChildren.map((child) => (
-          <TreeNodeMemo key={child.uri} item={child} level={level + 1} currentUri={currentUri} expandedKeys={expandedKeys} onExpandedKeysChange={onExpandedKeysChange} onSelectDirectory={onSelectDirectory} prefetch={prefetch} />
-        ))}
+      <div className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          {isOpen && !data && <div className="px-2 py-1 text-xs text-muted-foreground" style={{ marginLeft: `${(level + 1) * 16}px` }}>加载中...</div>}
+          {isOpen && children.map((child) => (
+            <TreeNodeMemo key={child.uri} item={child} level={level + 1} currentUri={currentUri} expandedKeys={expandedKeys} onExpandedKeysChange={onExpandedKeysChange} onSelectDirectory={onSelectDirectory} prefetch={prefetch} />
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -118,7 +112,7 @@ export function FileTree({ currentUri, expandedKeys, onExpandedKeysChange, onSel
   return (
     <div className="h-full overflow-auto font-mono">
       <div className="min-w-0 p-2">
-        <TreeNodeMemo item={{ uri: 'viking://', name: fileNameFromUri('viking://'), type: 'folder' }}
+        <TreeNodeMemo item={{ uri: 'viking://', name: fileNameFromUri('viking://') }}
           level={0} currentUri={currentUri} expandedKeys={expandedKeys} onExpandedKeysChange={onExpandedKeysChange}
           onSelectDirectory={onSelectDirectory} prefetch={prefetch} />
       </div>

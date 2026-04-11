@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUp, ChevronRight, RefreshCcw } from 'lucide-react'
 
 import { Button } from '#/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
 import {
   normalizeDirUri,
   parentUri,
@@ -50,8 +49,6 @@ export function VikingFileManager({
     new Set(['viking://']),
   )
   const [selectedFile, setSelectedFile] = useState<VikingFsEntry | null>(null)
-  const [dialogPreviewFile, setDialogPreviewFile] =
-    useState<VikingFsEntry | null>(null)
 
   useEffect(() => {
     const normalized = normalizeDirUri(initialUri || 'viking://')
@@ -69,13 +66,6 @@ export function VikingFileManager({
     const normalized = normalizeDirUri(uri)
     setCurrentUri(normalized)
     setSelectedFile(null)
-    setExpandedKeys((prev) => {
-      const next = new Set(prev)
-      for (const ancestor of getAncestorUris(normalized)) {
-        next.add(ancestor)
-      }
-      return next
-    })
   }
 
   const listQuery = useVikingFsList(currentUri, {
@@ -120,39 +110,65 @@ export function VikingFileManager({
   const showTree = currentUri !== 'viking://' || selectedFile !== null
   const showPreview = selectedFile !== null
 
-  const gridCols = showPreview
-    ? 'grid-cols-[280px_1fr]'
-    : showTree
-      ? 'grid-cols-[280px_1fr]'
-      : 'grid-cols-1'
+  const [treeWidth, setTreeWidth] = useState(280)
+  const dragging = useRef(false)
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    const startX = e.clientX
+    const startWidth = treeWidth
+
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.min(Math.max(startWidth + ev.clientX - startX, 160), 600)
+      setTreeWidth(newWidth)
+    }
+    const onUp = () => {
+      dragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [treeWidth])
 
   return (
     <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col">
-      <div className={`grid min-h-0 flex-1 ${gridCols}`}>
+      <div className="flex min-h-0 flex-1">
         {showTree && (
-          <section className="flex min-h-0 flex-col bg-muted/30">
-            <div className="flex items-center gap-1 border-b px-2 py-2">
-              <Button variant="ghost" size="icon" className="size-7" title="返回父级" onClick={handleGoParent}>
-                <ArrowUp className="size-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="size-7" title="刷新目录" onClick={() => void handleRefresh()}>
-                <RefreshCcw className="size-4" />
-              </Button>
-            </div>
-            <div className="min-h-0 flex-1">
-              <FileTree
-                currentUri={currentUri}
-                expandedKeys={expandedKeys}
-                onExpandedKeysChange={setExpandedKeys}
-                onSelectDirectory={updateUri}
-              />
-            </div>
-          </section>
+          <>
+            <section className="flex min-h-0 flex-col bg-muted/30" style={{ width: treeWidth, minWidth: treeWidth }}>
+              <div className="flex h-10 items-center gap-1 border-b px-2">
+                <Button variant="ghost" size="icon" className="size-7" title="返回父级" onClick={handleGoParent}>
+                  <ArrowUp className="size-4" />
+                </Button>
+                <Button variant="ghost" size="icon" className="size-7" title="刷新目录" onClick={() => void handleRefresh()}>
+                  <RefreshCcw className="size-4" />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <FileTree
+                  currentUri={currentUri}
+                  expandedKeys={expandedKeys}
+                  onExpandedKeysChange={setExpandedKeys}
+                  onSelectDirectory={updateUri}
+                />
+              </div>
+            </section>
+            <div
+              className="w-1 shrink-0 cursor-col-resize border-l bg-transparent transition-colors hover:bg-primary/20 active:bg-primary/30"
+              onMouseDown={handleResizeStart}
+            />
+          </>
         )}
 
         {showPreview ? (
-          <section className="flex min-h-0 flex-col border-l">
-            <div className="min-h-0 flex-1">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="mx-auto min-h-0 w-full max-w-5xl flex-1">
               <FilePreview
                 file={selectedFile}
                 onClose={() => setSelectedFile(null)}
@@ -161,8 +177,8 @@ export function VikingFileManager({
             </div>
           </section>
         ) : (
-          <section className={`flex min-h-0 flex-col ${showTree ? 'border-l' : ''}`}>
-            <div className="flex min-h-0 items-center gap-1 border-b px-3 py-2">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex h-10 items-center gap-1 border-b px-3">
               {!showTree && (
                 <>
                   <Button variant="ghost" size="icon" className="size-7" title="返回父级" onClick={handleGoParent}>
@@ -200,26 +216,6 @@ export function VikingFileManager({
           </section>
         )}
       </div>
-
-      <Dialog
-        open={Boolean(dialogPreviewFile)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDialogPreviewFile(null)
-          }
-        }}
-      >
-        <DialogContent
-          showCloseButton={false}
-          className="h-[80vh] w-[75vw] max-w-[75vw] overflow-hidden p-0 sm:max-w-[75vw]"
-        >
-          <DialogTitle className="sr-only">文件预览</DialogTitle>
-          <FilePreview
-            file={dialogPreviewFile}
-            onClose={() => setDialogPreviewFile(null)}
-          />
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
