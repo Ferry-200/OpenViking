@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUp, RefreshCcw } from 'lucide-react'
+import { ArrowUp, ChevronRight, RefreshCcw } from 'lucide-react'
 
 import { Button } from '#/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '#/components/ui/dialog'
-import { LegacyPageShell } from '#/components/legacy/shared/page-shell'
 import {
   normalizeDirUri,
   parentUri,
@@ -104,30 +103,42 @@ export function VikingFileManager({
     onUriChange?.(currentUri)
   }, [currentUri, onUriChange])
 
-  return (
-    <LegacyPageShell
-      title="Viking File Manager"
-      description="三栏文件管理器：目录树 / 文件列表 / 文件预览。"
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={handleGoParent}>
-          <ArrowUp className="size-4" />
-          返回父级
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleRefresh()}
-        >
-          <RefreshCcw className="size-4" />
-          刷新目录
-        </Button>
-      </div>
+  const breadcrumbs = useMemo(() => {
+    const body = currentUri.slice('viking://'.length).replace(/\/$/, '')
+    const parts = body ? body.split('/').filter(Boolean) : []
+    const crumbs: Array<{ label: string; uri: string }> = [
+      { label: 'viking://', uri: 'viking://' },
+    ]
+    let running = 'viking://'
+    for (const part of parts) {
+      running = `${running}${part}/`
+      crumbs.push({ label: part, uri: running })
+    }
+    return crumbs
+  }, [currentUri])
 
-      <div className="h-[calc(100vh-14rem)] overflow-hidden rounded-xl border bg-card">
-        <div className="grid h-full xl:grid-cols-[300px_minmax(0,1fr)_minmax(360px,0.85fr)]">
-          <section className="flex min-h-0 flex-col border-r">
-            <div className="border-b px-4 py-3 text-sm font-medium">目录树</div>
+  const showTree = currentUri !== 'viking://' || selectedFile !== null
+  const showPreview = selectedFile !== null
+
+  const gridCols = showPreview
+    ? 'grid-cols-[280px_1fr]'
+    : showTree
+      ? 'grid-cols-[280px_1fr]'
+      : 'grid-cols-1'
+
+  return (
+    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col">
+      <div className={`grid min-h-0 flex-1 ${gridCols}`}>
+        {showTree && (
+          <section className="flex min-h-0 flex-col bg-muted/30">
+            <div className="flex items-center gap-1 border-b px-2 py-2">
+              <Button variant="ghost" size="icon" className="size-7" title="返回父级" onClick={handleGoParent}>
+                <ArrowUp className="size-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="size-7" title="刷新目录" onClick={() => void handleRefresh()}>
+                <RefreshCcw className="size-4" />
+              </Button>
+            </div>
             <div className="min-h-0 flex-1">
               <FileTree
                 currentUri={currentUri}
@@ -137,30 +148,10 @@ export function VikingFileManager({
               />
             </div>
           </section>
+        )}
 
-          <section className="flex min-h-0 flex-col border-r">
-            <div className="border-b px-4 py-3 text-sm font-medium">
-              文件列表
-              <span className="ml-2 text-xs text-muted-foreground">
-                {listQuery.isLoading ? '加载中...' : `${entries.length} 项`}
-              </span>
-            </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              <FileList
-                entries={entries}
-                selectedFileUri={selectedFile?.uri || null}
-                onOpenDirectory={updateUri}
-                onOpenFile={(file) => setSelectedFile(file)}
-                onPreviewFile={(file) => {
-                  setSelectedFile(file)
-                  setDialogPreviewFile(file)
-                }}
-              />
-            </div>
-          </section>
-
-          <section className="flex min-h-0 flex-col">
-            <div className="border-b px-4 py-3 text-sm font-medium">预览</div>
+        {showPreview ? (
+          <section className="flex min-h-0 flex-col border-l">
             <div className="min-h-0 flex-1">
               <FilePreview
                 file={selectedFile}
@@ -169,7 +160,45 @@ export function VikingFileManager({
               />
             </div>
           </section>
-        </div>
+        ) : (
+          <section className={`flex min-h-0 flex-col ${showTree ? 'border-l' : ''}`}>
+            <div className="flex min-h-0 items-center gap-1 border-b px-3 py-2">
+              {!showTree && (
+                <>
+                  <Button variant="ghost" size="icon" className="size-7" title="返回父级" onClick={handleGoParent}>
+                    <ArrowUp className="size-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="size-7" title="刷新目录" onClick={() => void handleRefresh()}>
+                    <RefreshCcw className="size-4" />
+                  </Button>
+                  <div className="mx-1 h-4 w-px bg-border" />
+                </>
+              )}
+              <nav className="flex items-center gap-0.5 overflow-hidden text-sm text-muted-foreground">
+                {breadcrumbs.map((crumb, i) => (
+                  <span key={crumb.uri} className="flex shrink-0 items-center gap-0.5">
+                    {i > 0 && <ChevronRight className="size-3" />}
+                    <button
+                      type="button"
+                      className={`rounded px-1 py-0.5 hover:bg-muted ${i === breadcrumbs.length - 1 ? 'font-medium text-foreground' : ''}`}
+                      onClick={() => updateUri(crumb.uri)}
+                    >
+                      {crumb.label}
+                    </button>
+                  </span>
+                ))}
+              </nav>
+            </div>
+            <div className="min-h-0 flex-1 overflow-auto">
+              <FileList
+                entries={entries}
+                selectedFileUri={null}
+                onOpenDirectory={updateUri}
+                onOpenFile={(file) => setSelectedFile(file)}
+              />
+            </div>
+          </section>
+        )}
       </div>
 
       <Dialog
@@ -191,6 +220,6 @@ export function VikingFileManager({
           />
         </DialogContent>
       </Dialog>
-    </LegacyPageShell>
+    </div>
   )
 }

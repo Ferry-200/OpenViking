@@ -21,7 +21,7 @@ import { X } from 'lucide-react'
 import { Button } from '#/components/ui/button'
 import { ScrollArea } from '#/components/ui/scroll-area'
 import { ovClient } from '#/lib/ov-client'
-import { formatSize, normalizeUriForDisplay, useVikingFilePreview } from '#/lib/viking-fm'
+import { formatSize, useVikingFilePreview } from '#/lib/viking-fm'
 import type { VikingFsEntry } from '#/lib/viking-fm'
 
 hljs.registerLanguage('bash', bash)
@@ -249,7 +249,6 @@ export function FilePreview({ file, onClose, showCloseButton = true }: FilePrevi
     return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">选择文件后在这里预览</div>
   }
 
-  const displayUri = normalizeUriForDisplay(file.uri, file.isDir)
   const isMarkdown = preview?.fileType === 'markdown'
 
   return (
@@ -361,9 +360,6 @@ export function FilePreview({ file, onClose, showCloseButton = true }: FilePrevi
         ) : null}
       </ScrollArea>
 
-      <div className="border-t px-4 py-2 text-xs text-muted-foreground break-all">
-        {displayUri}
-      </div>
     </div>
   )
 }

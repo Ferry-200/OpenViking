@@ -27,7 +27,7 @@ interface TreeNodeProps {
 }
 
 const FolderIcon = ({ isOpen }: { isOpen: boolean }) => (
-  <svg className="mr-2 size-5 shrink-0 text-yellow-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+  <svg className="mr-2 size-5 shrink-0 text-gray-700 dark:text-gray-300" viewBox="0 0 24 24" fill="currentColor" stroke="none">
     {isOpen ? (
       <path d="M5 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h4a2 2 0 0 1 2 2v1M5 19h14a2 2 0 0 0 2-2v-5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2z" />
     ) : (
@@ -87,9 +87,9 @@ function TreeNode({
     <div className="relative text-gray-700 dark:text-gray-300">
       <div className="relative" style={{ marginLeft: `${level * 16}px` }}>
         {level > 0 && <span className="absolute -left-2 top-1/2 h-3 w-2 -translate-y-1/2 rounded-bl-md border-b border-l border-gray-300 dark:border-gray-700" />}
-        <div className={`flex cursor-pointer items-center rounded-md px-2 py-1.5 transition-colors ${isSelected ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-white' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+        <div className={`flex cursor-pointer items-center rounded-md px-2 py-1.5 transition-colors ${isSelected ? 'bg-gray-200 dark:bg-gray-700 text-foreground' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
           onClick={handleSelect} onMouseEnter={handleMouseEnter}>
-          <div className="flex flex-grow items-center">
+          <div className="flex min-w-0 flex-grow items-center">
             <button type="button" className="inline-flex" onClick={(e) => { e.stopPropagation(); handleToggle() }} aria-label={isOpen ? '收起' : '展开'}>
               {isFolder ? <ChevronIcon isOpen={isOpen} /> : <div className="w-4 shrink-0" />}
             </button>
@@ -117,7 +117,7 @@ export function FileTree({ currentUri, expandedKeys, onExpandedKeysChange, onSel
 
   return (
     <div className="h-full overflow-auto font-mono">
-      <div className="min-w-max p-2">
+      <div className="min-w-0 p-2">
         <TreeNodeMemo item={{ uri: 'viking://', name: fileNameFromUri('viking://'), type: 'folder' }}
           level={0} currentUri={currentUri} expandedKeys={expandedKeys} onExpandedKeysChange={onExpandedKeysChange}
           onSelectDirectory={onSelectDirectory} prefetch={prefetch} />

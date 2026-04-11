@@ -11,7 +11,10 @@ dist-ssr
 .vinxi
 __unconfig*
 todos.json
-
+.agents
+.claude
+.kiro
+skills
 # 根目录的 gitignore 有一些不合理的规则，在这里覆盖掉
 !src/lib/
 !src/lib/**
