@@ -1,5 +1,7 @@
 {
   "app.title": "OpenViking Console",
+  "sidebar.group.home": "首页",
+  "sidebar.home": "首页",
   "sidebar.group.data": "Data",
   "sidebar.group.ops": "Ops",
   "sidebar.group.access": "Access",

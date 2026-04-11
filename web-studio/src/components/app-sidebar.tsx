@@ -16,6 +16,12 @@ import {
 
 const sidebarNav = [
   {
+    labelKey: 'sidebar.group.home',
+    items: [
+      { labelKey: 'sidebar.home', to: '/home' as const },
+    ],
+  },
+  {
     labelKey: 'sidebar.group.data',
     items: [
       { icon: FolderTree as ComponentType<{ className?: string }>, labelKey: 'sidebar.filesystem', to: '/data/filesystem' as const },
@@ -26,13 +32,13 @@ const sidebarNav = [
   {
     labelKey: 'sidebar.group.ops',
     items: [
-      { icon: Settings as ComponentType<{ className?: string }>, labelKey: 'sidebar.ops', to: '/legacy/ops' as const },
+      { icon: Shield as ComponentType<{ className?: string }>, labelKey: 'sidebar.ops', to: '/legacy/ops' as const },
     ],
   },
   {
     labelKey: 'sidebar.group.access',
     items: [
-      { icon: Shield as ComponentType<{ className?: string }>, labelKey: 'sidebar.settings', to: '/access/settings' as const },
+      { icon: Settings as ComponentType<{ className?: string }>, labelKey: 'sidebar.settings', to: '/access/settings' as const },
     ],
   },
 ]
@@ -60,7 +66,7 @@ export function AppSidebar() {
                         tooltip={label}
                         render={<Link to={item.to} />}
                       >
-                        <item.icon className="size-4" />
+                        {'icon' in item && item.icon && <item.icon className="size-4" />}
                         <span>{label}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

@@ -1,4 +1,5 @@
 export const routeItems = [
+  { key: 'home', to: '/home' as const },
   { key: 'filesystem', to: '/data/filesystem' as const },
   { key: 'find', to: '/data/find' as const },
   { key: 'memory', to: '/data/memory' as const },

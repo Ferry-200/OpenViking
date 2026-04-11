@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as LegacyOpsRouteImport } from './routes/legacy/ops'
 import { Route as DataMemoryRouteImport } from './routes/data/memory'
@@ -16,6 +17,11 @@ import { Route as DataFindRouteImport } from './routes/data/find'
 import { Route as DataFilesystemRouteImport } from './routes/data/filesystem'
 import { Route as AccessSettingsRouteImport } from './routes/access/settings'
 
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -49,6 +55,7 @@ const AccessSettingsRoute = AccessSettingsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
   '/access/settings': typeof AccessSettingsRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
@@ -57,6 +64,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
   '/access/settings': typeof AccessSettingsRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
@@ -66,6 +74,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/home': typeof HomeRoute
   '/access/settings': typeof AccessSettingsRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
@@ -76,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/home'
     | '/access/settings'
     | '/data/filesystem'
     | '/data/find'
@@ -84,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/home'
     | '/access/settings'
     | '/data/filesystem'
     | '/data/find'
@@ -92,6 +103,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/home'
     | '/access/settings'
     | '/data/filesystem'
     | '/data/find'
@@ -101,6 +113,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HomeRoute: typeof HomeRoute
   AccessSettingsRoute: typeof AccessSettingsRoute
   DataFilesystemRoute: typeof DataFilesystemRoute
   DataFindRoute: typeof DataFindRoute
@@ -110,6 +123,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -157,6 +177,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HomeRoute: HomeRoute,
   AccessSettingsRoute: AccessSettingsRoute,
   DataFilesystemRoute: DataFilesystemRoute,
   DataFindRoute: DataFindRoute,
