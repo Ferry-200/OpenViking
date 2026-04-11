@@ -1,0 +1,59 @@
+# syntax=docker/dockerfile:1.9
+#
+# OpenViking Dev Image
+# Two-target Dockerfile:
+#   - "builder" target: compiles .venv + native binaries (run once, output to volumes)
+#   - "runtime" target: lightweight runtime that mounts pre-built artifacts
+
+# ── Builder stage: full toolchain for one-time compilation ───────────
+FROM golang:1.26-trixie AS go-toolchain
+FROM rust:1.88-trixie AS rust-toolchain
+
+FROM python:3.13-slim-trixie AS builder
+
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV PATH="/usr/local/cargo/bin:/usr/local/go/bin:${PATH}"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_OPENVIKING=0.0.0.dev0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake git curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+# Copy source for building
+COPY Cargo.toml Cargo.lock pyproject.toml uv.lock setup.py README.md ./
+COPY build_support/ build_support/
+COPY bot/ bot/
+COPY crates/ crates/
+COPY openviking/ openviking/
+COPY openviking_cli/ openviking_cli/
+COPY src/ src/
+COPY third_party/ third_party/
+
+# Build everything
+RUN uv sync --no-editable --extra bot
+
+# Output: /app/.venv and /app/openviking/bin/ contain all artifacts
+
+# ── Runtime stage: lightweight, no toolchains ────────────────────────
+FROM python:3.13-slim-trixie AS runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates libstdc++6 git \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/app/.venv/bin:${PATH}"
+ENV SETUPTOOLS_SCM_PRETEND_VERSION_FOR_OPENVIKING=0.0.0.dev0
+
+WORKDIR /app
+
+EXPOSE 1933 8020
+
+CMD ["bash", "/app/docker/openviking-console-entrypoint.sh"]

@@ -15,5 +15,18 @@
   "vikingbot.placeholder": "输入消息...",
   "vikingbot.send": "发送",
   "vikingbot.thinking": "思考中...",
-  "vikingbot.error": "请求失败，请重试。"
+  "vikingbot.error": "请求失败，请重试。",
+  "vikingbot.sessions": "会话",
+  "vikingbot.newChat": "新对话",
+  "vikingbot.deleteSession": "删除",
+  "vikingbot.noSessions": "暂无会话",
+  "vikingbot.showThinking": "显示思考过程",
+  "vikingbot.hideThinking": "隐藏思考过程",
+  "vikingbot.steps": "{{count}} 步",
+  "vikingbot.reasoning": "推理",
+  "vikingbot.toolCall": "工具调用",
+  "vikingbot.toolResult": "工具结果",
+  "vikingbot.iteration": "迭代",
+  "vikingbot.stop": "停止",
+  "vikingbot.streaming": "回复中..."
 }

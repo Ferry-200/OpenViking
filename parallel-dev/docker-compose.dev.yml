@@ -1,0 +1,88 @@
+# OpenViking Parallel Dev Environment
+#
+# Two-phase usage:
+#   1. Build once:  docker compose -f parallel-dev/docker-compose.dev.yml run --rm builder
+#   2. Create envs: agent-env.sh create <name> [branch]
+#
+# The builder compiles .venv + native binaries into shared named volumes.
+# Each worktree container mounts these volumes (readonly) + its own source code.
+
+services:
+  # One-time builder: compiles artifacts into shared volumes
+  builder:
+    build:
+      context: ${REPO_ROOT:-../..}
+      dockerfile: parallel-dev/Dockerfile.dev
+      target: builder
+    volumes:
+      - ov-dev-venv:/output/.venv
+      - ov-dev-bin:/output/bin
+    # Copy built artifacts from /app into the output volumes
+    command: >
+      bash -c "
+        echo '[builder] Copying .venv to shared volume...' &&
+        cp -a /app/.venv/. /output/.venv/ &&
+        echo '[builder] Copying native binaries to shared volume...' &&
+        mkdir -p /output/bin &&
+        cp -a /app/openviking/bin/. /output/bin/ 2>/dev/null || true &&
+        echo '[builder] Done. Artifacts ready in volumes.'
+      "
+    profiles:
+      - build
+
+  # Backend: mounts worktree code + pre-built artifacts
+  backend:
+    build:
+      context: ${REPO_ROOT:-../..}
+      dockerfile: parallel-dev/Dockerfile.dev
+      target: runtime
+    container_name: ${COMPOSE_PROJECT_NAME:-ov}-backend
+    volumes:
+      # Worktree source code (read-write, for Python changes)
+      - ${WORKTREE_PATH:-.}:/app
+      # Pre-built .venv from builder (readonly)
+      - ov-dev-venv:/app/.venv:ro
+      # Pre-built native binaries (readonly)
+      - ov-dev-bin:/app/openviking/bin:ro
+    ports:
+      - "${OV_PORT:-1933}:1933"
+      - "${CONSOLE_PORT:-8020}:8020"
+    environment:
+      - OPENVIKING_CONSOLE_PORT=8020
+      - OPENVIKING_CONSOLE_HOST=0.0.0.0
+      - OPENVIKING_CONFIG_FILE=/app/ov.conf
+      - SETUPTOOLS_SCM_PRETEND_VERSION_FOR_OPENVIKING=0.0.0.dev0
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:1933/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Frontend: Vite dev server with HMR
+  frontend:
+    image: node:22-slim
+    container_name: ${COMPOSE_PROJECT_NAME:-ov}-frontend
+    working_dir: /app/web-studio
+    volumes:
+      - ${WORKTREE_PATH:-.}/web-studio:/app/web-studio
+      - npm-cache:/root/.npm
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - VITE_OV_BASE_URL=http://host.docker.internal:${OV_PORT:-1933}
+    command: >
+      sh -c "npm install --prefer-offline && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  ov-dev-venv:
+    name: ov-dev-venv
+  ov-dev-bin:
+    name: ov-dev-bin
+  npm-cache:
+    name: ov-dev-npm-cache
