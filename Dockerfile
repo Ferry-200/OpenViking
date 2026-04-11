@@ -76,6 +76,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY --from=py-builder /app/.venv /app/.venv
+COPY docker/ov.conf /app/ov.conf
+RUN mkdir -p /root/.openviking && cp /app/ov.conf /root/.openviking/ov.conf
 COPY docker/openviking-console-entrypoint.sh /usr/local/bin/openviking-console-entrypoint
 RUN chmod +x /usr/local/bin/openviking-console-entrypoint
 ENV PATH="/app/.venv/bin:$PATH"
