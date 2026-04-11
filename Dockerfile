@@ -60,7 +60,7 @@ RUN case "${UV_LOCK_STRATEGY}" in \
 
 # Build ragfs-python (Rust RAGFS binding) and extract the native extension
 # into the installed openviking package.
-RUN --mount=type=cache,target=/root/.cache/uv,id=uv-${TARGETPLATFORM} \
+RUN --mount=type=cache,id=uv-${TARGETPLATFORM},target=/root/.cache/uv \
     uv pip install maturin && \
     export _TMPDIR=$(mktemp -d) && \
     trap 'rm -rf "$_TMPDIR"' EXIT && \
