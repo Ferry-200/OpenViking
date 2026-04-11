@@ -105,19 +105,19 @@ class UnifiedResourceProcessor:
                     "FeishuParser not available. "
                     "Install lark-oapi: pip install 'openviking[bot-feishu]'"
                 )
-            return await parser.parse(url, instruction=instruction)
+            return await parser.parse(url, instruction=instruction, **kwargs)
 
         # Route git protocols and repo URLs to CodeRepositoryParser
         if url.startswith(("git@", "git://", "ssh://")) or is_git_repo_url(url):
             from openviking.parse.parsers.code.code import CodeRepositoryParser
 
             parser = CodeRepositoryParser()
-            return await parser.parse(url, instruction=instruction)
+            return await parser.parse(url, instruction=instruction, **kwargs)
 
         from openviking.parse.parsers.html import HTMLParser
 
         parser = HTMLParser()
-        return await parser.parse(url, instruction=instruction)
+        return await parser.parse(url, instruction=instruction, **kwargs)
 
     @staticmethod
     def _is_feishu_url(url: str) -> bool:
@@ -167,13 +167,29 @@ class UnifiedResourceProcessor:
             try:
                 with zipfile.ZipFile(file_path, "r") as zipf:
                     safe_extract_zip(zipf, temp_dir)
+
+                extracted_entries = [p for p in temp_dir.iterdir() if p.name not in {".", ".."}]
+                if len(extracted_entries) == 1 and extracted_entries[0].is_dir():
+                    dir_kwargs = dict(kwargs)
+                    dir_kwargs.pop("source_name", None)
+                    return await self._process_directory(
+                        extracted_entries[0], instruction, **dir_kwargs
+                    )
+
                 return await self._process_directory(temp_dir, instruction, **kwargs)
             finally:
                 pass  # Don't delete temp_dir yet, it will be used by TreeBuilder
+        source_name = kwargs.get("source_name")
+        if source_name:
+            kwargs["resource_name"] = Path(source_name).stem
+            kwargs.setdefault("source_name", source_name)
+        else:
+            kwargs.setdefault("resource_name", file_path.stem)
+
         return await parse(
             str(file_path),
             instruction=instruction,
             vlm_processor=self._get_vlm_processor(),
             storage=self.storage,
-            resource_name=file_path.stem,
+            **kwargs,
         )

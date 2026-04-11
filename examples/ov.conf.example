@@ -14,15 +14,13 @@
       "volcengine": {
         "region": "cn-beijing",
         "ak": null,
-        "sk": null
+        "sk": null,
+        "session_token": null
       }
     },
     "agfs": {
-      "port": 1833,
-      "log_level": "warn",
       "backend": "local",
       "timeout": 10,
-      "retry_times": 3,
       "s3": {
         "bucket": null,
         "region": null,
@@ -30,7 +28,8 @@
         "secret_key": null,
         "endpoint": null,
         "prefix": "",
-        "use_ssl": true
+        "use_ssl": true,
+        "disable_batch_delete": false
       }
     }
   },
@@ -42,6 +41,11 @@
         "dimension": 1024,
         "provider": "volcengine",
         "input": "multimodal"
+    },
+    "circuit_breaker": {
+        "failure_threshold": 5,
+        "reset_timeout": 60,
+        "max_reset_timeout": 600
     }
   },
   "embedding_ollama_example": {

@@ -60,6 +60,7 @@ class BaseChannelConfig(BaseModel):
 
     type: Any = ChannelType.TELEGRAM  # Default for backwards compatibility
     enabled: bool = True
+    ov_tools_enable: bool = True
 
     def channel_id(self) -> str:
         return "default"
@@ -402,6 +403,20 @@ class ChannelsConfig(BaseModel):
             elif isinstance(item, BaseChannelConfig):
                 result.append(item)
         return result
+
+    def get_channel_by_key(self, channel_key: str) -> BaseChannelConfig | None:
+        """Get channel config by channel key.
+
+        Args:
+            channel_key: Channel key in format "type__channel_id"
+
+        Returns:
+            Channel config if found, None otherwise
+        """
+        for channel_config in self.get_all_channels():
+            if channel_config.channel_key() == channel_key:
+                return channel_config
+        return None
 
 
 class AgentsConfig(BaseModel):
