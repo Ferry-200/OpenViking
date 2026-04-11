@@ -7,5 +7,13 @@
   "sidebar.find": "Find",
   "sidebar.memory": "Add Memory",
   "sidebar.ops": "Ops",
-  "sidebar.settings": "Settings"
+  "sidebar.settings": "Settings",
+  "sidebar.group.ai": "AI",
+  "sidebar.vikingbot": "VikingBot",
+  "vikingbot.title": "VikingBot",
+  "vikingbot.description": "Chat with VikingBot",
+  "vikingbot.placeholder": "Type a message...",
+  "vikingbot.send": "Send",
+  "vikingbot.thinking": "Thinking...",
+  "vikingbot.error": "Request failed, please try again."
 }

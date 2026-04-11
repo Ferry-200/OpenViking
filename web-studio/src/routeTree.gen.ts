@@ -14,6 +14,7 @@ import { Route as LegacyOpsRouteImport } from './routes/legacy/ops'
 import { Route as DataMemoryRouteImport } from './routes/data/memory'
 import { Route as DataFindRouteImport } from './routes/data/find'
 import { Route as DataFilesystemRouteImport } from './routes/data/filesystem'
+import { Route as BotVikingbotRouteImport } from './routes/bot/vikingbot'
 import { Route as AccessSettingsRouteImport } from './routes/access/settings'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const DataFilesystemRoute = DataFilesystemRouteImport.update({
   path: '/data/filesystem',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BotVikingbotRoute = BotVikingbotRouteImport.update({
+  id: '/bot/vikingbot',
+  path: '/bot/vikingbot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccessSettingsRoute = AccessSettingsRouteImport.update({
   id: '/access/settings',
   path: '/access/settings',
@@ -50,6 +56,7 @@ const AccessSettingsRoute = AccessSettingsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/access/settings': typeof AccessSettingsRoute
+  '/bot/vikingbot': typeof BotVikingbotRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
   '/data/memory': typeof DataMemoryRoute
@@ -58,6 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/access/settings': typeof AccessSettingsRoute
+  '/bot/vikingbot': typeof BotVikingbotRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
   '/data/memory': typeof DataMemoryRoute
@@ -67,6 +75,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/access/settings': typeof AccessSettingsRoute
+  '/bot/vikingbot': typeof BotVikingbotRoute
   '/data/filesystem': typeof DataFilesystemRoute
   '/data/find': typeof DataFindRoute
   '/data/memory': typeof DataMemoryRoute
@@ -77,6 +86,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/access/settings'
+    | '/bot/vikingbot'
     | '/data/filesystem'
     | '/data/find'
     | '/data/memory'
@@ -85,6 +95,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/access/settings'
+    | '/bot/vikingbot'
     | '/data/filesystem'
     | '/data/find'
     | '/data/memory'
@@ -93,6 +104,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/access/settings'
+    | '/bot/vikingbot'
     | '/data/filesystem'
     | '/data/find'
     | '/data/memory'
@@ -102,6 +114,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccessSettingsRoute: typeof AccessSettingsRoute
+  BotVikingbotRoute: typeof BotVikingbotRoute
   DataFilesystemRoute: typeof DataFilesystemRoute
   DataFindRoute: typeof DataFindRoute
   DataMemoryRoute: typeof DataMemoryRoute
@@ -145,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DataFilesystemRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/bot/vikingbot': {
+      id: '/bot/vikingbot'
+      path: '/bot/vikingbot'
+      fullPath: '/bot/vikingbot'
+      preLoaderRoute: typeof BotVikingbotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/access/settings': {
       id: '/access/settings'
       path: '/access/settings'
@@ -158,6 +178,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccessSettingsRoute: AccessSettingsRoute,
+  BotVikingbotRoute: BotVikingbotRoute,
   DataFilesystemRoute: DataFilesystemRoute,
   DataFindRoute: DataFindRoute,
   DataMemoryRoute: DataMemoryRoute,

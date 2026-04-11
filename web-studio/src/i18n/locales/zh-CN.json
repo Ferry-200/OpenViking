@@ -7,5 +7,13 @@
   "sidebar.find": "搜索",
   "sidebar.memory": "添加记忆",
   "sidebar.ops": "运维",
-  "sidebar.settings": "设置"
+  "sidebar.settings": "设置",
+  "sidebar.group.ai": "AI",
+  "sidebar.vikingbot": "VikingBot",
+  "vikingbot.title": "VikingBot",
+  "vikingbot.description": "与 VikingBot 对话",
+  "vikingbot.placeholder": "输入消息...",
+  "vikingbot.send": "发送",
+  "vikingbot.thinking": "思考中...",
+  "vikingbot.error": "请求失败，请重试。"
 }

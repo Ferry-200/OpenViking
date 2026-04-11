@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { Brain, FolderTree, Search, Settings, Shield } from 'lucide-react'
+import { Bot, Brain, FolderTree, Search, Settings, Shield } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -34,6 +34,12 @@ const sidebarNav = [
     labelKey: 'sidebar.group.access',
     items: [
       { icon: Shield as ComponentType<{ className?: string }>, labelKey: 'sidebar.settings', to: '/access/settings' as const },
+    ],
+  },
+  {
+    labelKey: 'sidebar.group.ai',
+    items: [
+      { icon: Bot as ComponentType<{ className?: string }>, labelKey: 'sidebar.vikingbot', to: '/bot/vikingbot' as const },
     ],
   },
 ]
