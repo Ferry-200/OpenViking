@@ -153,15 +153,13 @@ def get_viking_fs() -> "VikingFS":
 
 
 class VikingFS:
-    """AGFS-based OpenViking file system.
+    """RAGFS-based OpenViking file system.
 
     APIs are divided into two categories:
-    - AGFS basic commands (direct forwarding): read, ls, write, mkdir, rm, mv, grep, stat
+    - RAGFS basic commands (direct forwarding): read, ls, write, mkdir, rm, mv, grep, stat
     - VikingFS specific capabilities: abstract, overview, find, search, relations, link, unlink
 
-    Supports two modes:
-    - HTTP mode: Use AGFSClient to connect to AGFS server via HTTP
-    - Binding mode: Use AGFSBindingClient to directly use AGFS implementation
+    Uses Rust binding mode: Use RAGFSBindingClient to directly use RAGFS implementation
     """
 
     def __init__(
@@ -539,11 +537,21 @@ class VikingFS:
         exclude_uri: Optional[str] = None,
         case_insensitive: bool = False,
         node_limit: Optional[int] = None,
+        level_limit: int = 5,
         ctx: Optional[RequestContext] = None,
     ) -> Dict:
         """Content search by pattern or keywords.
 
         Grep search implemented at VikingFS layer, supports encrypted files.
+
+        Args:
+            uri: Viking URI
+            pattern: Regular expression pattern to search for
+            exclude_uri: Optional URI prefix to exclude from search
+            case_insensitive: Whether to perform case-insensitive matching
+            node_limit: Maximum number of results to return
+            level_limit: Maximum depth level to traverse (default: 5)
+            ctx: Request context
         """
         self._ensure_access(uri, ctx)
 
@@ -555,9 +563,13 @@ class VikingFS:
             self._ensure_access(excluded_prefix, ctx)
 
         results = []
+        files_scanned = 0
 
-        async def search_recursive(current_uri: str):
+        async def search_recursive(current_uri: str, current_depth: int):
             if node_limit and len(results) >= node_limit:
+                return
+
+            if current_depth > level_limit:
                 return
 
             normalized_current_uri = self._normalize_uri(current_uri)
@@ -585,8 +597,10 @@ class VikingFS:
                     continue
 
                 if entry.get("isDir"):
-                    await search_recursive(entry_uri)
+                    await search_recursive(entry_uri, current_depth + 1)
                 else:
+                    nonlocal files_scanned
+                    files_scanned += 1
                     try:
                         content = await self.read(entry_uri, ctx=ctx)
                         if isinstance(content, bytes):
@@ -607,9 +621,14 @@ class VikingFS:
                     except Exception as e:
                         logger.debug(f"Failed to grep {entry_uri}: {e}")
 
-        await search_recursive(uri)
+        await search_recursive(uri, 0)
 
-        return {"matches": results, "count": len(results)}
+        return {
+            "matches": results,
+            "count": len(results),
+            "match_count": len(results),
+            "files_scanned": files_scanned,
+        }
 
     @staticmethod
     def _is_resource_root_uri(uri: str) -> bool:
@@ -877,10 +896,14 @@ class VikingFS:
         self._ensure_access(uri, ctx)
         path = self._uri_to_path(uri, ctx=ctx)
         info = self.agfs.stat(path)
-        if not info.get("isDir"):
+        if not info.get("isDir", info.get("is_dir")):
             raise ValueError(f"{uri} is not a directory")
         file_path = f"{path}/.abstract.md"
-        content_bytes = self._handle_agfs_read(self.agfs.read(file_path))
+        try:
+            content_bytes = self._handle_agfs_read(self.agfs.read(file_path))
+        except Exception:
+            # Fallback to default if .abstract.md doesn't exist
+            return f"# {uri}\n\n[Directory abstract is not ready]"
 
         if self._encryptor:
             real_ctx = self._ctx_or_default(ctx)
@@ -897,10 +920,14 @@ class VikingFS:
         self._ensure_access(uri, ctx)
         path = self._uri_to_path(uri, ctx=ctx)
         info = self.agfs.stat(path)
-        if not info.get("isDir"):
+        if not info.get("isDir", info.get("is_dir")):
             raise ValueError(f"{uri} is not a directory")
         file_path = f"{path}/.overview.md"
-        content_bytes = self._handle_agfs_read(self.agfs.read(file_path))
+        try:
+            content_bytes = self._handle_agfs_read(self.agfs.read(file_path))
+        except Exception:
+            # Fallback to default if .overview.md doesn't exist
+            return f"# {uri}\n\n[Directory overview is not ready]"
 
         if self._encryptor:
             real_ctx = self._ctx_or_default(ctx)

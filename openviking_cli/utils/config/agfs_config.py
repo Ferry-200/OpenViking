@@ -26,7 +26,7 @@ class S3Config(BaseModel):
 
     access_key: Optional[str] = Field(
         default=None,
-        description="S3 access key ID. If not provided, AGFS may attempt to use environment variables or IAM roles.",
+        description="S3 access key ID. If not provided, RAGFS may attempt to use environment variables or IAM roles.",
     )
 
     secret_key: Optional[str] = Field(
@@ -60,6 +60,13 @@ class S3Config(BaseModel):
         description="How to persist S3 directory markers: 'none' skips marker creation, 'empty' writes a zero-byte marker, and 'nonempty' writes a non-empty marker payload. Defaults to 'empty'.",
     )
 
+    disable_batch_delete: bool = Field(
+        default=False,
+        description="Disable batch delete (DeleteObjects) and use sequential single-object deletes instead. "
+        "Required for S3-compatible services like Alibaba Cloud OSS that require a Content-MD5 header "
+        "for DeleteObjects but AWS SDK v2 does not send it by default. Defaults to False.",
+    )
+
     model_config = {"extra": "forbid"}
 
     def validate_config(self):
@@ -83,48 +90,22 @@ class S3Config(BaseModel):
 
 
 class AGFSConfig(BaseModel):
-    """Configuration for AGFS (Agent Global File System)."""
+    """Configuration for RAGFS (Rust-based AGFS)."""
 
     path: Optional[str] = Field(
         default=None,
-        description="[Deprecated in favor of `storage.workspace`] AGFS data storage path. This will be ignored if `storage.workspace` is set.",
-    )
-
-    port: int = Field(default=1833, description="AGFS service port")
-
-    log_level: str = Field(default="warn", description="AGFS log level")
-
-    url: Optional[str] = Field(
-        default="http://localhost:1833", description="AGFS service URL for service mode"
-    )
-
-    mode: str = Field(
-        default="binding-client",
-        description="AGFS client mode: 'http-client' | 'binding-client'",
+        description="[Deprecated in favor of `storage.workspace`] RAGFS data storage path. This will be ignored if `storage.workspace` is set.",
     )
 
     backend: str = Field(
-        default="local", description="AGFS storage backend: 'local' | 's3' | 'memory'"
+        default="local", description="RAGFS storage backend: 'local' | 's3' | 'memory'"
     )
 
-    timeout: int = Field(default=10, description="AGFS request timeout (seconds)")
-
-    retry_times: int = Field(default=3, description="AGFS retry times on failure")
-
-    use_ssl: bool = Field(
-        default=True,
-        description="Enable/Disable SSL (HTTPS) for AGFS service. Set to False for local testing without HTTPS.",
-    )
-
-    lib_path: Optional[str] = Field(
-        default=None,
-        description="Path to AGFS binding shared library. If set, use python binding instead of HTTP client. "
-        "Default: third_party/agfs/bin/libagfsbinding.{so,dylib}",
-    )
+    timeout: int = Field(default=10, description="RAGFS request timeout (seconds)")
 
     # S3 backend configuration
     # These settings are used when backend is set to 's3'.
-    # AGFS will act as a gateway to the specified S3 bucket.
+    # RAGFS will act as a gateway to the specified S3 bucket.
     s3: S3Config = Field(default_factory=lambda: S3Config(), description="S3 backend configuration")
 
     model_config = {"extra": "forbid"}
@@ -132,14 +113,9 @@ class AGFSConfig(BaseModel):
     @model_validator(mode="after")
     def validate_config(self):
         """Validate configuration completeness and consistency"""
-        if self.mode not in ["http-client", "binding-client"]:
-            raise ValueError(
-                f"Invalid AGFS mode: '{self.mode}'. Must be one of: 'http-client', 'binding-client'"
-            )
-
         if self.backend not in ["local", "s3", "memory"]:
             raise ValueError(
-                f"Invalid AGFS backend: '{self.backend}'. Must be one of: 'local', 's3', 'memory'"
+                f"Invalid RAGFS backend: '{self.backend}'. Must be one of: 'local', 's3', 'memory'"
             )
 
         if self.backend == "local":
