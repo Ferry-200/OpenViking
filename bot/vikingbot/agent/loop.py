@@ -217,6 +217,7 @@ class AgentLoop:
         session_key: SessionKey,
         publish_events: bool = True,
         sender_id: str | None = None,
+        ov_tools_enable: bool = True,
     ) -> tuple[str | None, list[dict], dict[str, int], int]:
         """
         Run the core agent loop: call LLM, execute tools, repeat until done.
@@ -225,6 +226,7 @@ class AgentLoop:
             messages: Initial message list
             session_key: Session key for tool execution context
             publish_events: Whether to publish ITERATION/REASONING/TOOL_CALL events to the bus
+            ov_tools_enable: Whether to enable OpenViking tools for this session
 
         Returns:
             tuple of (final_content, tools_used)
@@ -252,7 +254,7 @@ class AgentLoop:
 
             response = await self.provider.chat(
                 messages=messages,
-                tools=self.tools.get_definitions(),
+                tools=self.tools.get_definitions(ov_tools_enable=ov_tools_enable),
                 model=self.model,
                 session_id=session_key.safe_name(),
             )
@@ -396,7 +398,7 @@ class AgentLoop:
             max_ticks = 7
 
             while not long_running_notified and tick_count < max_ticks:
-                await asyncio.sleep(40)
+                await asyncio.sleep(60)
                 if long_running_notified:
                     break
                 if msg.metadata:
@@ -446,6 +448,18 @@ class AgentLoop:
                         session_key=msg.session_key, content="🐈 Sorry, you are not authorized to use this command.",
                         metadata=msg.metadata
                     )
+                session.clear()
+                await self.sessions.save(session)
+                return OutboundMessage(
+                    session_key=msg.session_key, content="🐈 New session started. Session history droped.", metadata=msg.metadata
+                )
+            elif cmd == "/compact":
+                # Clone session for async consolidation, then immediately clear original
+                if not self._check_cmd_auth(msg):
+                    return OutboundMessage(
+                        session_key=msg.session_key, content="🐈 Sorry, you are not authorized to use this command.",
+                        metadata=msg.metadata
+                    )
                 session_clone = session.clone()
                 session.clear()
                 await self.sessions.save(session)
@@ -484,7 +498,7 @@ class AgentLoop:
                 await self.sessions.save(session)
                 return OutboundMessage(
                     session_key=msg.session_key,
-                    content=None,
+                    content="",
                     metadata=msg.metadata,
                     event_type=OutboundEventType.NO_REPLY,
                 )
@@ -514,14 +528,16 @@ class AgentLoop:
                 eval=self._eval,
             )
 
+            ov_tools_enable = self._get_ov_tools_enable(session_key)
             # Build initial messages (use get_history for LLM-formatted messages)
             messages = await message_context.build_messages(
                 history=session.get_history(),
                 current_message=msg.content,
                 media=msg.media if msg.media else None,
                 session_key=msg.session_key,
+                ov_tools_enable=ov_tools_enable,
             )
-            # logger.info(f"New messages: {messages}")
+            logger.info(f"New messages: {messages}")
 
             # Run agent loop
             final_content, tools_used, token_usage, iteration = await self._run_agent_loop(
@@ -529,6 +545,7 @@ class AgentLoop:
                 session_key=session_key,
                 publish_events=True,
                 sender_id=msg.sender_id,
+                ov_tools_enable=ov_tools_enable,
             )
 
             # Log response preview
@@ -565,6 +582,29 @@ class AgentLoop:
             except asyncio.CancelledError:
                 pass
 
+    def _get_channel_config(self, session_key: SessionKey):
+        """Get channel config for a session key.
+
+        Args:
+            session_key: Session key to get channel config for
+
+        Returns:
+            Channel config object if found, None otherwise
+        """
+        return self.config.channels_config.get_channel_by_key(session_key.channel_key())
+
+    def _get_ov_tools_enable(self, session_key: SessionKey) -> bool:
+        """Get ov_tools_enable setting from channel config.
+
+        Args:
+            session_key: Session key to get channel config for
+
+        Returns:
+            True if ov tools should be enabled, False otherwise
+        """
+        channel_config = self._get_channel_config(session_key)
+        return getattr(channel_config, "ov_tools_enable", True) if channel_config else True
+
     async def _process_system_message(self, msg: InboundMessage) -> OutboundMessage | None:
         """
         Process a system message (e.g., subagent announce).
@@ -577,15 +617,23 @@ class AgentLoop:
         session = self.sessions.get_or_create(msg.session_key)
 
         # Build messages with the announce content
+        ov_tools_enable = self._get_ov_tools_enable(msg.session_key)
         messages = await self.context.build_messages(
-            history=session.get_history(), current_message=msg.content, session_key=msg.session_key
+            history=session.get_history(),
+            current_message=msg.content,
+            session_key=msg.session_key,
+            ov_tools_enable=ov_tools_enable,
         )
+
+        # Check channel config for ov_tools_enable setting
+        ov_tools_enable = self._get_ov_tools_enable(msg.session_key)
 
         # Run agent loop (no events published)
         final_content, tools_used, token_usage, iteration = await self._run_agent_loop(
             messages=messages,
             session_key=msg.session_key,
             publish_events=False,
+            ov_tools_enable=ov_tools_enable,
         )
 
         if final_content is None or (
@@ -741,12 +789,11 @@ Respond with ONLY valid JSON, no markdown fences."""
         allow_from = []
         if self.config.ov_server and self.config.ov_server.admin_user_id:
             allow_from.append(self.config.ov_server.admin_user_id)
-        for channel in self.config.channels_config.get_all_channels():
-            if channel.channel_key() == msg.session_key.channel_key():
-                allow_cmd = getattr(channel, 'allow_cmd_from', [])
-                if allow_cmd:
-                    allow_from.extend(allow_cmd)
-                break
+        channel_config = self._get_channel_config(msg.session_key)
+        if channel_config:
+            allow_cmd = getattr(channel_config, 'allow_cmd_from', [])
+            if allow_cmd:
+                allow_from.extend(allow_cmd)
 
         # If channel not found or sender not in allow_from list, ignore message
         if msg.sender_id not in allow_from:

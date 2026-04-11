@@ -122,6 +122,7 @@ exports/
 tests/api_test/api-test-report.html
 tests/api_test/openviking-server.log
 tests/api_test/openviking-server.pid
+tests/oc2ov_test/config/settings.py
 
 # Benchmark outputs
 examples/benchmark/outputs/
