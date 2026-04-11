@@ -149,6 +149,7 @@ logs/
 *.temp
 .tmp/
 ov.conf
+!docker/ov.conf
 result/
 
 # Jupyter Notebook
