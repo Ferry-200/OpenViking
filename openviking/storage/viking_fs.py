@@ -667,6 +667,43 @@ class VikingFS:
         except Exception:
             return {}
 
+    @staticmethod
+    def _is_resource_root_uri(uri: str) -> bool:
+        """Return True if URI is exactly viking://resources/<resource_name>."""
+        try:
+            normalized = VikingURI.normalize(uri)
+        except Exception:
+            return False
+        parts = normalized.rstrip("/").split("/")
+        return (
+            len(parts) == 4
+            and parts[0] == "viking:"
+            and parts[1] == ""
+            and parts[2] == "resources"
+            and bool(parts[3])
+        )
+
+    async def _read_resource_meta(
+        self, uri: str, ctx: Optional[RequestContext] = None
+    ) -> Dict[str, Any]:
+        """Read .meta.json from a resource root directory.
+
+        Returns the parsed JSON dict, or empty dict if not found.
+        """
+        if not self._is_resource_root_uri(uri):
+            return {}
+        try:
+            meta_uri = f"{uri.rstrip('/')}/.meta.json"
+            content = await self.read(meta_uri, ctx=ctx)
+            if isinstance(content, bytes):
+                content = content.decode("utf-8", errors="replace")
+            loaded = json.loads(content)
+            if isinstance(loaded, dict):
+                return loaded
+            return {}
+        except Exception:
+            return {}
+
     async def stat(self, uri: str, ctx: Optional[RequestContext] = None) -> Dict[str, Any]:
         """
         File/directory information.
