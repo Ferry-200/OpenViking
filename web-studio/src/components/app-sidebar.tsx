@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { Brain, FolderTree, Search, Settings, Shield } from 'lucide-react'
+import { Brain, FolderTree, Search, Settings, Shield, Upload } from 'lucide-react'
 import type { ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -20,6 +20,7 @@ const sidebarNav = [
     labelKey: 'sidebar.group.data',
     items: [
       { icon: FolderTree as ComponentType<{ className?: string }>, labelKey: 'sidebar.filesystem', to: '/data/filesystem' as const },
+      { icon: Upload as ComponentType<{ className?: string }>, labelKey: 'sidebar.addResource', to: '/data/add-resource' as const },
       { icon: Search as ComponentType<{ className?: string }>, labelKey: 'sidebar.find', to: '/data/find' as const },
       { icon: Brain as ComponentType<{ className?: string }>, labelKey: 'sidebar.memory', to: '/data/memory' as const },
     ],
