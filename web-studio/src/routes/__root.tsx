@@ -1,99 +1,74 @@
-import { Outlet, createRootRoute, useLocation } from '@tanstack/react-router'
+import { RotateCcwIcon, TriangleAlertIcon } from 'lucide-react'
+import { Outlet, createRootRoute } from '@tanstack/react-router'
+import type { ErrorComponentProps } from '@tanstack/react-router'
 import { TanStackRouterDevtoolsPanel } from '@tanstack/react-router-devtools'
 import { TanStackDevtools } from '@tanstack/react-devtools'
-import { GlobeIcon, MoonIcon, PanelLeftIcon, SunIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useTheme } from 'next-themes'
 
-import { AppSidebar } from '#/components/app-sidebar'
+import { AppShell } from '#/components/app-shell'
 import { Button } from '#/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '#/components/ui/dropdown-menu'
-import { SidebarInset, SidebarProvider, useSidebar } from '#/components/ui/sidebar'
-import { routeItems } from '#/lib/legacy/routes'
-
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '#/components/ui/card'
 import '../styles.css'
 
 export const Route = createRootRoute({
   component: RootComponent,
+  errorComponent: RootErrorComponent,
 })
-
-const languages = [
-  { code: 'zh-CN', label: '中文' },
-  { code: 'en', label: 'English' },
-] as const
-
-function AppHeader() {
-  const { toggleSidebar } = useSidebar()
-  const { t, i18n } = useTranslation()
-  const { setTheme, resolvedTheme } = useTheme()
-  const location = useLocation()
-  const currentRoute = routeItems.find((item) => location.pathname.startsWith(item.to))
-  const currentLabel = currentRoute ? t(`sidebar.${currentRoute.key}`) : ''
-
-  return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="size-8" onClick={toggleSidebar}>
-          <PanelLeftIcon className="size-4" />
-        </Button>
-        <span className="text-base font-semibold tracking-tight">{t('app.title')}</span>
-        {currentLabel ? (
-          <span className="text-sm text-muted-foreground">/ {currentLabel}</span>
-        ) : null}
-      </div>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-        >
-          <SunIcon className="size-5 text-muted-foreground rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <MoonIcon className="absolute size-5 text-muted-foreground rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-        </Button>
-        <DropdownMenu>
-        <DropdownMenuTrigger
-          render={<Button variant="ghost" size="icon" className="size-8" />}
-        >
-          <GlobeIcon className="size-5 text-muted-foreground" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {languages.map((lang) => (
-            <DropdownMenuItem
-              key={lang.code}
-              onClick={() => i18n.changeLanguage(lang.code)}
-            >
-              {lang.label}
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
-      </div>
-    </header>
-  )
-}
 
 function RootComponent() {
   return (
     <>
-      <SidebarProvider>
-        <div className="flex h-screen w-full flex-col">
-          <AppHeader />
-          <div className="relative flex flex-1 overflow-hidden [--header-height:3.5rem]">
-            <AppSidebar />
-            <SidebarInset>
-              <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
-                <Outlet />
-              </div>
-            </SidebarInset>
-          </div>
-        </div>
-      </SidebarProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+      <TanStackDevtools
+        config={{
+          position: 'bottom-right',
+        }}
+        plugins={[
+          {
+            name: 'TanStack Router',
+            render: <TanStackRouterDevtoolsPanel />,
+          },
+        ]}
+      />
+    </>
+  )
+}
+
+function RootErrorComponent({ error, reset }: ErrorComponentProps) {
+  const { t } = useTranslation('common')
+  const message = error instanceof Error ? error.message : 'Unknown error'
+
+  return (
+    <>
+      <div className='flex min-h-svh items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(242,105,38,0.12),transparent_28%),linear-gradient(180deg,rgba(255,248,245,0.92)_0%,rgba(255,255,255,1)_32%)] px-4 py-10'>
+        <Card className='w-full max-w-2xl border-destructive/20 bg-background/95 shadow-lg'>
+          <CardHeader className='gap-3'>
+            <div className='flex items-center gap-3 text-destructive'>
+              <TriangleAlertIcon className='size-5' />
+              <CardTitle>{t('errorBoundary.title')}</CardTitle>
+            </div>
+            <CardDescription>
+              {t('errorBoundary.description')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='grid gap-4'>
+            <div className='rounded-lg border border-destructive/15 bg-destructive/5 px-4 py-3 font-mono text-sm text-foreground'>
+              {message}
+            </div>
+          </CardContent>
+          <CardFooter className='justify-end gap-2'>
+            <Button variant='outline' onClick={() => window.location.reload()}>
+              {t('errorBoundary.reload')}
+            </Button>
+            <Button onClick={() => reset()}>
+              <RotateCcwIcon />
+              {t('errorBoundary.retry')}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
       <TanStackDevtools
         config={{
           position: 'bottom-right',
