@@ -9,12 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as SessionsRouteRouteImport } from './routes/sessions/route'
 import { Route as ResourcesRouteRouteImport } from './routes/resources/route'
 import { Route as OperationsRouteRouteImport } from './routes/operations/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DataAddResourceRouteImport } from './routes/data/add-resource'
 
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SessionsRouteRoute = SessionsRouteRouteImport.update({
   id: '/sessions',
   path: '/sessions',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/operations': typeof OperationsRouteRoute
   '/resources': typeof ResourcesRouteRoute
   '/sessions': typeof SessionsRouteRoute
+  '/home': typeof HomeRoute
   '/data/add-resource': typeof DataAddResourceRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/operations': typeof OperationsRouteRoute
   '/resources': typeof ResourcesRouteRoute
   '/sessions': typeof SessionsRouteRoute
+  '/home': typeof HomeRoute
   '/data/add-resource': typeof DataAddResourceRoute
 }
 export interface FileRoutesById {
@@ -61,6 +69,7 @@ export interface FileRoutesById {
   '/operations': typeof OperationsRouteRoute
   '/resources': typeof ResourcesRouteRoute
   '/sessions': typeof SessionsRouteRoute
+  '/home': typeof HomeRoute
   '/data/add-resource': typeof DataAddResourceRoute
 }
 export interface FileRouteTypes {
@@ -70,15 +79,23 @@ export interface FileRouteTypes {
     | '/operations'
     | '/resources'
     | '/sessions'
+    | '/home'
     | '/data/add-resource'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/operations' | '/resources' | '/sessions' | '/data/add-resource'
+  to:
+    | '/'
+    | '/operations'
+    | '/resources'
+    | '/sessions'
+    | '/home'
+    | '/data/add-resource'
   id:
     | '__root__'
     | '/'
     | '/operations'
     | '/resources'
     | '/sessions'
+    | '/home'
     | '/data/add-resource'
   fileRoutesById: FileRoutesById
 }
@@ -87,11 +104,19 @@ export interface RootRouteChildren {
   OperationsRouteRoute: typeof OperationsRouteRoute
   ResourcesRouteRoute: typeof ResourcesRouteRoute
   SessionsRouteRoute: typeof SessionsRouteRoute
+  HomeRoute: typeof HomeRoute
   DataAddResourceRoute: typeof DataAddResourceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sessions': {
       id: '/sessions'
       path: '/sessions'
@@ -135,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   OperationsRouteRoute: OperationsRouteRoute,
   ResourcesRouteRoute: ResourcesRouteRoute,
   SessionsRouteRoute: SessionsRouteRoute,
+  HomeRoute: HomeRoute,
   DataAddResourceRoute: DataAddResourceRoute,
 }
 export const routeTree = rootRouteImport

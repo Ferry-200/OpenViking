@@ -7,6 +7,9 @@ const zhCN = {
       defaultTitle: 'OpenViking Studio',
     },
     navigation: {
+      home: {
+        title: '首页',
+      },
       addResource: {
         title: '添加资源',
       },

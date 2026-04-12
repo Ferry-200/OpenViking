@@ -20,12 +20,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+const ENV_BASE_URL = typeof import.meta.env.VITE_OV_BASE_URL === 'string'
+  ? import.meta.env.VITE_OV_BASE_URL.trim()
+  : ''
+
 function normalizeBaseUrl(baseUrl?: string): string {
-  const envBaseUrl = typeof import.meta.env.VITE_OV_BASE_URL === 'string'
-    ? import.meta.env.VITE_OV_BASE_URL.trim()
-    : ''
   const fallback = isBrowser() ? window.location.origin : ''
-  return (baseUrl || envBaseUrl || fallback).trim().replace(/\/+$/, '')
+  return (baseUrl || ENV_BASE_URL || fallback).trim().replace(/\/+$/, '')
 }
 
 function readSessionStorage(key: string): string {
@@ -251,7 +252,9 @@ export function createOvClient(options: OvClientOptions = {}): OvClientAdapter {
   }
 }
 
+const DEFAULT_LOCAL_BASE_URL = 'http://127.0.0.1:1933'
+
 export const ovClient = createOvClient({
-  baseUrl: 'http://127.0.0.1:1933',
+  baseUrl: ENV_BASE_URL || DEFAULT_LOCAL_BASE_URL,
   bindSdkClient: true,
 })
