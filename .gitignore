@@ -173,6 +173,8 @@ celerybeat-schedule
 # mkdocs documentation
 /site
 docs/superpowers/
+docs/design/ai-chat.html
+docs/design/ai-chat/
 
 # mypy
 .mypy_cache/
