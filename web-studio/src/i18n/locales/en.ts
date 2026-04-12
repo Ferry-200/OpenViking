@@ -125,12 +125,6 @@ const en = {
     success: 'Resource added successfully',
     fileBlocked: '"{{name}}" is not a supported file type.',
     error: 'Request Failed',
-    latestResult: {
-      title: 'Latest Result',
-      description: 'Latest raw response from temp upload and add resource requests.',
-      idle: 'Idle',
-      noRequests: 'No requests sent yet.',
-    },
     dirPicker: {
       title: 'Select Directory',
       select: 'Select',

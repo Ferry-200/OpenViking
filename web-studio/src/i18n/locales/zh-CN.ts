@@ -125,12 +125,6 @@ const zhCN = {
     success: '资源添加成功',
     fileBlocked: '"{{name}}" 不是支持的文件类型。',
     error: '请求失败',
-    latestResult: {
-      title: '最新结果',
-      description: '临时上传和添加资源请求的原始响应。',
-      idle: '空闲',
-      noRequests: '暂无请求记录。',
-    },
     dirPicker: {
       title: '选择目录',
       select: '选择',
