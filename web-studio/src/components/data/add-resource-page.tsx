@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { fileTypeFromBlob } from 'file-type'
 import { AlertTriangle, CheckCircle2, ChevronRight, FileIcon, FolderOpen, Globe, Loader2Icon, Upload, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -15,25 +15,31 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/component
 import { DirectoryPickerDialog } from '#/components/data/directory-picker-dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
-import { LegacyPageShell } from '#/components/legacy/shared/page-shell'
 import { Progress } from '#/components/ui/progress'
 import { Textarea } from '#/components/ui/textarea'
 import {
-  getErrorMessage,
-  isRecord,
-} from '#/lib/legacy/data-utils'
-import {
   getOvResult,
+  isOvClientError,
   postResources,
   postResourcesTempUpload,
 } from '#/lib/ov-client'
-import {
-  applyLegacyConnectionSettings,
-  loadLegacyConnectionSettings,
-} from '#/lib/legacy/connection'
 
 type Mode = 'upload' | 'remote'
 type UploadPhase = 'idle' | 'uploading' | 'processing' | 'done'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getErrorMessage(error: unknown): string {
+  if (isOvClientError(error)) {
+    return `${error.code}: ${error.message}`
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -48,7 +54,7 @@ function getExtensionFromName(name: string): string {
 }
 
 export function AddResourcePage() {
-  const { t } = useTranslation()
+  const { t } = useTranslation('addResource')
 
   const [mode, setMode] = useState<Mode>('upload')
   const [remoteUrl, setRemoteUrl] = useState('')
@@ -63,10 +69,6 @@ export function AddResourcePage() {
   const [phase, setPhase] = useState<UploadPhase>('idle')
   const [uploadProgress, setUploadProgress] = useState(0)
   const [skippedFiles, setSkippedFiles] = useState<string[]>([])
-
-  useEffect(() => {
-    applyLegacyConnectionSettings(loadLegacyConnectionSettings())
-  }, [])
 
   const detectFileType = useCallback(async (file: File) => {
     try {
@@ -208,23 +210,27 @@ export function AddResourcePage() {
       toast.error(message)
     },
     onSuccess: () => {
-      toast.success(t('addResource.success'))
+      toast.success(t('success'))
     },
   })
 
   const activeError = addResourceMutation.error
   const fileTypeLabel =
-    detectedType ?? (selectedFile ? getExtensionFromName(selectedFile.name) || t('addResource.fileInfo.unknown') : null)
+    detectedType ?? (selectedFile ? getExtensionFromName(selectedFile.name) || t('fileInfo.unknown') : null)
 
   const canSubmit =
     mode === 'upload' ? !!selectedFile : !!remoteUrl.trim()
 
   return (
-    <LegacyPageShell title={t('addResource.title')} description={t('addResource.description')}>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">{t('description')}</p>
+      </header>
       {activeError ? (
         <Alert variant="destructive">
           <Upload className="size-4" />
-          <AlertTitle>{t('addResource.error')}</AlertTitle>
+          <AlertTitle>{t('error')}</AlertTitle>
           <AlertDescription>{getErrorMessage(activeError)}</AlertDescription>
         </Alert>
       ) : null}
@@ -244,7 +250,7 @@ export function AddResourcePage() {
                 onClick={() => setMode('upload')}
               >
                 <Upload className="size-4" />
-                {t('addResource.mode.upload')}
+                {t('mode.upload')}
               </button>
               <button
                 type="button"
@@ -256,7 +262,7 @@ export function AddResourcePage() {
                 onClick={() => setMode('remote')}
               >
                 <Globe className="size-4" />
-                {t('addResource.mode.remote')}
+                {t('mode.remote')}
               </button>
             </div>
 
@@ -299,7 +305,7 @@ export function AddResourcePage() {
                         e.stopPropagation()
                         removeFile()
                       }}
-                      aria-label={t('addResource.fileInfo.remove')}
+                      aria-label={t('fileInfo.remove')}
                     >
                       <X className="size-4" />
                     </Button>
@@ -307,23 +313,23 @@ export function AddResourcePage() {
                 ) : (
                   <div className="space-y-2">
                     <Upload className="mx-auto size-10 text-muted-foreground/60" />
-                    <p className="text-sm font-medium">{t('addResource.dropzone.title')}</p>
-                    <p className="text-xs text-muted-foreground">{t('addResource.dropzone.hint')}</p>
-                    <p className="text-xs text-muted-foreground/70">{t('addResource.dropzone.supportedFormats')}</p>
+                    <p className="text-sm font-medium">{t('dropzone.title')}</p>
+                    <p className="text-xs text-muted-foreground">{t('dropzone.hint')}</p>
+                    <p className="text-xs text-muted-foreground/70">{t('dropzone.supportedFormats')}</p>
                   </div>
                 )}
               </div>
             ) : (
               /* Remote Mode: URL Input */
               <div className="space-y-2">
-                <Label htmlFor="add-resource-remote-url">{t('addResource.remoteUrl')}</Label>
+                <Label htmlFor="add-resource-remote-url">{t('remoteUrl')}</Label>
                 <Input
                   id="add-resource-remote-url"
-                  placeholder={t('addResource.remoteUrl.placeholder')}
+                  placeholder={t('remoteUrl.placeholder')}
                   value={remoteUrl}
                   onChange={(e) => setRemoteUrl(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">{t('addResource.remoteUrl.hint')}</p>
+                <p className="text-xs text-muted-foreground">{t('remoteUrl.hint')}</p>
               </div>
             )}
 
@@ -332,7 +338,7 @@ export function AddResourcePage() {
               <div className="space-y-2">
                 <Progress value={uploadProgress}>
                   <span className="text-sm text-muted-foreground">
-                    {t('addResource.upload.progress', { progress: uploadProgress })}
+                    {t('upload.progress', { progress: uploadProgress })}
                   </span>
                 </Progress>
               </div>
@@ -344,7 +350,7 @@ export function AddResourcePage() {
                 <div className="flex items-center gap-2">
                   <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
-                    {t('addResource.upload.processing')}
+                    {t('upload.processing')}
                   </p>
                 </div>
               </div>
@@ -354,14 +360,14 @@ export function AddResourcePage() {
               <div className="space-y-3 rounded-lg border border-border/50 bg-muted/10 p-4">
                 <div className="flex items-center gap-2 text-sm font-medium text-green-600 dark:text-green-400">
                   <CheckCircle2 className="size-4" />
-                  {t('addResource.result.success')}
+                  {t('result.success')}
                 </div>
 
                 {skippedFiles.length > 0 && (
                   <Collapsible>
                     <CollapsibleTrigger className="flex items-center gap-1 text-sm text-amber-600 dark:text-amber-400 hover:underline">
                       <AlertTriangle className="size-4" />
-                      {t('addResource.result.skippedFiles', { count: skippedFiles.length })}
+                      {t('result.skippedFiles', { count: skippedFiles.length })}
                       <ChevronRight className="size-3" />
                     </CollapsibleTrigger>
                     <CollapsibleContent>
@@ -379,7 +385,7 @@ export function AddResourcePage() {
                   size="sm"
                   onClick={resetUploadState}
                 >
-                  {t('addResource.continueUpload')}
+                  {t('continueUpload')}
                 </Button>
               </div>
             )}
@@ -390,13 +396,13 @@ export function AddResourcePage() {
                 <ChevronRight
                   className={`size-4 transition-transform ${advancedOpen ? 'rotate-90' : ''}`}
                 />
-                {t('addResource.advancedOptions')}
+                {t('advancedOptions')}
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-3 space-y-4 rounded-lg border border-border/50 bg-muted/10 p-4">
                   {/* Parent URI */}
                   <div className="space-y-2">
-                    <Label htmlFor="add-resource-parent">{t('addResource.parentUri')}</Label>
+                    <Label htmlFor="add-resource-parent">{t('parentUri')}</Label>
                     <div className="flex gap-2">
                       <Input
                         id="add-resource-parent"
@@ -413,27 +419,27 @@ export function AddResourcePage() {
                         onClick={() => setDirPickerOpen(true)}
                       >
                         <FolderOpen className="mr-1.5 size-4" />
-                        {t('addResource.parentUri.browse')}
+                        {t('parentUri.browse')}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">{t('addResource.parentUri.hint')}</p>
+                    <p className="text-xs text-muted-foreground">{t('parentUri.hint')}</p>
                   </div>
 
                   {/* Checkboxes */}
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <Label className="flex items-center gap-2">
                       <Checkbox checked={directlyUploadMedia} onCheckedChange={(checked) => setDirectlyUploadMedia(Boolean(checked))} />
-                      <span>{t('addResource.directlyUploadMedia')}</span>
+                      <span>{t('directlyUploadMedia')}</span>
                     </Label>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t('addResource.directlyUploadMedia.hint')}</p>
+                  <p className="text-xs text-muted-foreground">{t('directlyUploadMedia.hint')}</p>
 
                   {/* Reason */}
                   <div className="space-y-2">
-                    <Label htmlFor="add-resource-reason">{t('addResource.reason')}</Label>
+                    <Label htmlFor="add-resource-reason">{t('reason')}</Label>
                     <Textarea
                       id="add-resource-reason"
-                      placeholder={t('addResource.reason.placeholder')}
+                      placeholder={t('reason.placeholder')}
                       value={reason}
                       onChange={(e) => setReason(e.target.value)}
                     />
@@ -441,10 +447,10 @@ export function AddResourcePage() {
 
                   {/* Instruction */}
                   <div className="space-y-2">
-                    <Label htmlFor="add-resource-instruction">{t('addResource.instruction')}</Label>
+                    <Label htmlFor="add-resource-instruction">{t('instruction')}</Label>
                     <Textarea
                       id="add-resource-instruction"
-                      placeholder={t('addResource.instruction.placeholder')}
+                      placeholder={t('instruction.placeholder')}
                       value={instruction}
                       onChange={(e) => setInstruction(e.target.value)}
                     />
@@ -459,10 +465,10 @@ export function AddResourcePage() {
                 disabled={!canSubmit || addResourceMutation.isPending}
               >
                 {addResourceMutation.isPending
-                  ? t('addResource.uploading')
+                  ? t('uploading')
                   : mode === 'upload'
-                    ? t('addResource.upload')
-                    : t('addResource.submit')}
+                    ? t('upload')
+                    : t('submit')}
               </Button>
             )}
           </CardContent>
@@ -475,6 +481,6 @@ export function AddResourcePage() {
         value={parentUri}
         onSelect={setParentUri}
       />
-    </LegacyPageShell>
+    </div>
   )
 }
