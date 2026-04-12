@@ -15,18 +15,5 @@
   "vikingbot.placeholder": "Type a message...",
   "vikingbot.send": "Send",
   "vikingbot.thinking": "Thinking...",
-  "vikingbot.error": "Request failed, please try again.",
-  "vikingbot.sessions": "Sessions",
-  "vikingbot.newChat": "New Chat",
-  "vikingbot.deleteSession": "Delete",
-  "vikingbot.noSessions": "No sessions yet",
-  "vikingbot.showThinking": "Show thinking",
-  "vikingbot.hideThinking": "Hide thinking",
-  "vikingbot.steps": "{{count}} steps",
-  "vikingbot.reasoning": "Reasoning",
-  "vikingbot.toolCall": "Tool Call",
-  "vikingbot.toolResult": "Tool Result",
-  "vikingbot.iteration": "Iteration",
-  "vikingbot.stop": "Stop",
-  "vikingbot.streaming": "Responding..."
+  "vikingbot.error": "Request failed, please try again."
 }

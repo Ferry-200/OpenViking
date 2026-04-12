@@ -184,11 +184,11 @@ async def chat_stream(
                 ) as response:
                     response.raise_for_status()
 
-                    # Stream the response content preserving SSE format
+                    # Stream the response content
                     async for line in response.aiter_lines():
-                        # Forward every line (including blank ones) to
-                        # preserve the `data: ...\n\n` SSE delimiter.
-                        yield f"{line}\n"
+                        if line:
+                            # Forward the SSE line as-is
+                            yield f"{line}\n"
         except httpx.RequestError as e:
             logger.error(f"Failed to connect to bot service: {e}")
             error_event = {
@@ -212,106 +212,3 @@ async def chat_stream(
             "Connection": "keep-alive",
         },
     )
-
-
-# --- Session proxy endpoints ---
-
-
-def _build_proxy_headers(request: Request) -> dict:
-    """Build headers for proxying to vikingbot."""
-    headers = {"Content-Type": "application/json"}
-    token = extract_auth_token(request)
-    if token:
-        headers["X-API-Key"] = token
-    return headers
-
-
-@router.get("/sessions")
-async def list_sessions(
-    request: Request,
-    _ctx: RequestContext = Depends(get_request_context),
-):
-    """List bot sessions. Proxied to Vikingbot."""
-    bot_url = get_bot_url()
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{bot_url}/bot/v1/sessions",
-                headers=_build_proxy_headers(request),
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            return response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        logger.error(f"Session list failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@router.post("/sessions")
-async def create_session(
-    request: Request,
-    _ctx: RequestContext = Depends(get_request_context),
-):
-    """Create a bot session. Proxied to Vikingbot."""
-    bot_url = get_bot_url()
-    try:
-        body = await request.json()
-    except json.JSONDecodeError:
-        body = {}
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{bot_url}/bot/v1/sessions",
-                json=body,
-                headers=_build_proxy_headers(request),
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            return response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        logger.error(f"Session create failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@router.get("/sessions/{session_id}")
-async def get_session(
-    session_id: str,
-    request: Request,
-    _ctx: RequestContext = Depends(get_request_context),
-):
-    """Get a bot session. Proxied to Vikingbot."""
-    bot_url = get_bot_url()
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{bot_url}/bot/v1/sessions/{session_id}",
-                headers=_build_proxy_headers(request),
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            return response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        logger.error(f"Session get failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session(
-    session_id: str,
-    request: Request,
-    _ctx: RequestContext = Depends(get_request_context),
-):
-    """Delete a bot session. Proxied to Vikingbot."""
-    bot_url = get_bot_url()
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.delete(
-                f"{bot_url}/bot/v1/sessions/{session_id}",
-                headers=_build_proxy_headers(request),
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            return response.json()
-    except (httpx.RequestError, httpx.HTTPStatusError) as e:
-        logger.error(f"Session delete failed: {e}")
-        raise HTTPException(status_code=502, detail=str(e))
