@@ -3,16 +3,20 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import {
   ActivityIcon,
   BlocksIcon,
+  ChevronRightIcon,
   FolderTreeIcon,
+  HardDriveIcon,
   HomeIcon,
   LanguagesIcon,
   MoonIcon,
   PlugZapIcon,
   SunIcon,
+  UploadIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/components/ui/collapsible'
 import { ConnectionDialog } from '#/components/connection-dialog'
 import { Badge } from '#/components/ui/badge'
 import { buttonVariants } from '#/components/ui/button'
@@ -36,13 +40,39 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
 } from '#/components/ui/sidebar'
 import { AppConnectionProvider, useAppConnection } from '#/hooks/use-app-connection'
+import { ResourceUploadProvider } from '#/hooks/use-resource-upload'
 import { describeServerMode } from '#/hooks/use-server-mode'
 
-const NAV_ITEMS = [
+type NavItem = {
+  icon: React.ComponentType
+  id: string
+  titleKey: string
+  to: string
+  children?: readonly NavSubItem[]
+}
+
+type NavSubItem = {
+  icon: React.ComponentType
+  id: string
+  titleKey: string
+  to: string
+}
+
+type NavGroupItemProps = {
+  item: NavItem & { children: readonly NavSubItem[] }
+  pathname: string
+  title: string
+  t: ReturnType<typeof useTranslation>['t']
+}
+
+const NAV_ITEMS: readonly NavItem[] = [
   {
     icon: HomeIcon,
     id: 'home',
@@ -54,6 +84,20 @@ const NAV_ITEMS = [
     id: 'resources',
     titleKey: 'navigation.resources.title',
     to: '/resources',
+    children: [
+      {
+        icon: HardDriveIcon,
+        id: 'fileSystem',
+        titleKey: 'navigation.fileSystem.title',
+        to: '/resources',
+      },
+      {
+        icon: UploadIcon,
+        id: 'addResource',
+        titleKey: 'navigation.addResource.title',
+        to: '/resources/add-resource',
+      },
+    ],
   },
   {
     icon: BlocksIcon,
@@ -90,10 +134,61 @@ function resolveLanguage(value: string | undefined): (typeof LANGUAGE_OPTIONS)[n
   return 'en'
 }
 
+function NavGroupItem({ item, pathname, title, t }: NavGroupItemProps) {
+  const Icon = item.icon
+  const isActive = pathname === item.to || pathname.startsWith(`${item.to}/`)
+  const [open, setOpen] = React.useState(isActive)
+
+  React.useEffect(() => {
+    if (isActive) {
+      setOpen(true)
+    }
+  }, [isActive])
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className='group/collapsible'>
+      <SidebarMenuItem>
+        <CollapsibleTrigger
+          render={
+            <SidebarMenuButton tooltip={title}>
+              <Icon />
+              <span>{title}</span>
+              <ChevronRightIcon className='ml-auto transition-transform duration-200 group-data-[open]/collapsible:rotate-90' />
+            </SidebarMenuButton>
+          }
+        />
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {item.children.map((child) => {
+              const ChildIcon = child.icon
+              const childActive = pathname === child.to || (child.to !== item.to && pathname.startsWith(`${child.to}/`))
+              const childTitle = t(child.titleKey, { ns: 'appShell' })
+
+              return (
+                <SidebarMenuSubItem key={child.id}>
+                  <SidebarMenuSubButton
+                    render={<Link to={child.to} />}
+                    isActive={childActive}
+                  >
+                    <ChildIcon />
+                    <span>{childTitle}</span>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              )
+            })}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  )
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AppConnectionProvider>
-      <AppShellInner>{children}</AppShellInner>
+      <ResourceUploadProvider>
+        <AppShellInner>{children}</AppShellInner>
+      </ResourceUploadProvider>
     </AppConnectionProvider>
   )
 }
@@ -103,7 +198,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   const { openConnectionDialog, serverMode } = useAppConnection()
   const { setTheme, resolvedTheme } = useTheme()
-  const currentItem = NAV_ITEMS.find((item) => pathname === item.to || pathname.startsWith(`${item.to}/`))
   const serverModeBadge = describeServerMode(serverMode)
   const currentLanguage = resolveLanguage(i18n.resolvedLanguage ?? i18n.language)
   const currentLanguageOption = LANGUAGE_OPTIONS.find((item) => item.value === currentLanguage) ?? LANGUAGE_OPTIONS[0]
@@ -177,9 +271,16 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   {NAV_ITEMS.map((item) => {
-                    const Icon = item.icon
                     const isActive = pathname === item.to || pathname.startsWith(`${item.to}/`)
                     const title = t(item.titleKey, { ns: 'appShell' })
+
+                    if (item.children) {
+                      return (
+                        <NavGroupItem key={item.id} item={item} pathname={pathname} title={title} t={t} />
+                      )
+                    }
+
+                    const Icon = item.icon
 
                     return (
                       <SidebarMenuItem key={item.id}>
