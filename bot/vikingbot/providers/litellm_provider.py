@@ -9,7 +9,13 @@ from litellm import acompletion
 from loguru import logger
 
 from vikingbot.integrations.langfuse import LangfuseClient
-from vikingbot.providers.base import LLMProvider, LLMResponse, ToolCallRequest
+from vikingbot.providers.base import (
+    DeltaCallback,
+    LLMProvider,
+    LLMResponse,
+    ToolCallRequest,
+    consume_stream,
+)
 from vikingbot.providers.registry import find_by_model, find_gateway
 from vikingbot.utils.helpers import cal_str_tokens
 
@@ -170,9 +176,15 @@ class LiteLLMProvider(LLMProvider):
         max_tokens: int = 4096,
         temperature: float = 0.7,
         session_id: str | None = None,
+        on_content_delta: DeltaCallback | None = None,
+        on_reasoning_delta: DeltaCallback | None = None,
     ) -> LLMResponse:
         """
         Send a chat completion request via LiteLLM.
+
+        When either delta callback is provided, the request is sent with
+        stream=True and chunks are forwarded through the callbacks while being
+        accumulated into the final LLMResponse.
 
         Args:
             messages: List of message dicts with 'role' and 'content'.
@@ -181,9 +193,13 @@ class LiteLLMProvider(LLMProvider):
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID for tracing.
+            on_content_delta: Optional async callback invoked with each
+                incremental content chunk.
+            on_reasoning_delta: Optional async callback invoked with each
+                incremental reasoning chunk.
 
         Returns:
-            LLMResponse with content and/or tool calls.
+            LLMResponse with accumulated content and/or tool calls.
         """
         model = self._resolve_model(model or self.default_model)
 
@@ -233,8 +249,19 @@ class LiteLLMProvider(LLMProvider):
                         metadata=metadata,
                     )
 
-            response = await acompletion(**kwargs)
-            llm_response = self._parse_response(response)
+            streaming = on_content_delta is not None or on_reasoning_delta is not None
+            if streaming:
+                kwargs["stream"] = True
+                kwargs["stream_options"] = {"include_usage": True}
+                stream_iter = await acompletion(**kwargs)
+                llm_response = await consume_stream(
+                    stream_iter,
+                    on_content_delta=on_content_delta,
+                    on_reasoning_delta=on_reasoning_delta,
+                )
+            else:
+                response = await acompletion(**kwargs)
+                llm_response = self._parse_response(response)
 
             # Update and end Langfuse observation
             if langfuse_observation:
@@ -322,11 +349,14 @@ class LiteLLMProvider(LLMProvider):
                 args = tc.function.arguments
                 tokens = cal_str_tokens(tc.function.name, text_type="en")
                 if isinstance(args, str):
+                    raw_args = args
                     try:
-                        tokens += cal_str_tokens(args, text_type="mixed")
-                        args = json.loads(args)
+                        tokens += cal_str_tokens(raw_args, text_type="mixed")
+                        args = json.loads(raw_args)
                     except json.JSONDecodeError:
-                        args = {"raw": args}
+                        args = {"raw": raw_args}
+                    if not isinstance(args, dict):
+                        args = {"raw": raw_args}
 
                 tool_calls.append(
                     ToolCallRequest(id=tc.id, name=tc.function.name, arguments=args, tokens=tokens)
