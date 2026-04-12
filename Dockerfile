@@ -30,13 +30,14 @@ WORKDIR /app
 
 # Copy source required for setup.py artifact builds and native extension build.
 COPY Cargo.toml Cargo.lock ./
-COPY pyproject.toml uv.lock setup.py README.md ./
+COPY pyproject.toml uv.lock setup.py MANIFEST.in README.md ./
 COPY build_support/ build_support/
 COPY bot/ bot/
 COPY crates/ crates/
 COPY openviking/ openviking/
 COPY openviking_cli/ openviking_cli/
 COPY src/ src/
+COPY third_party/ third_party/
 
 # Install project and dependencies (triggers setup.py artifact builds + build_extension).
 # Default to auto-refreshing uv.lock inside the ephemeral build context when it is
