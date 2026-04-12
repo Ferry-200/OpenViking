@@ -190,3 +190,72 @@ async def test_put_ignores_root_api_key_in_body(config_client: httpx.AsyncClient
     disk = json.loads(ov_conf.read_text())
     assert disk["server"]["root_api_key"] == ROOT_KEY  # unchanged
     assert disk["server"]["port"] == 7777  # other field applied
+
+
+async def test_put_empty_body_is_noop(config_client: httpx.AsyncClient, ov_conf: Path):
+    """PUT with empty body {} preserves all config values."""
+    before = json.loads(ov_conf.read_text())
+    resp = await config_client.put(
+        "/api/v1/config",
+        json={},
+        headers=root_headers(),
+    )
+    assert resp.status_code == 200
+    after = json.loads(ov_conf.read_text())
+    # Original values preserved (new keys may appear with defaults, but no value changed)
+    for key, value in before.get("server", {}).items():
+        assert after["server"][key] == value
+
+
+async def test_put_ignores_encryption_enabled(config_client: httpx.AsyncClient, ov_conf: Path):
+    """PUT strips encryption_enabled from input (immutable field)."""
+    resp = await config_client.put(
+        "/api/v1/config",
+        json={"encryption_enabled": False, "port": 6666},
+        headers=root_headers(),
+    )
+    assert resp.status_code == 200
+    disk = json.loads(ov_conf.read_text())
+    assert disk.get("encryption", {}).get("enabled") is True  # unchanged
+    assert disk["server"]["port"] == 6666
+
+
+async def test_put_then_get_consistent(config_client: httpx.AsyncClient):
+    """GET after PUT returns the same config that PUT returned."""
+    put_resp = await config_client.put(
+        "/api/v1/config",
+        json={"port": 4321},
+        headers=root_headers(),
+    )
+    get_resp = await config_client.get("/api/v1/config", headers=root_headers())
+    assert put_resp.json()["result"] == get_resp.json()["result"]
+
+
+async def test_put_config_not_found(config_client: httpx.AsyncClient, monkeypatch):
+    """PUT returns 400 when config file cannot be resolved."""
+    monkeypatch.setattr(
+        "openviking.server.routers.config.resolve_config_path",
+        lambda *_args, **_kwargs: None,
+    )
+    resp = await config_client.put(
+        "/api/v1/config",
+        json={"port": 1234},
+        headers=root_headers(),
+    )
+    assert resp.status_code == 400
+
+
+async def test_put_concurrent_no_data_loss(config_client: httpx.AsyncClient, ov_conf: Path):
+    """Concurrent PUTs don't lose each other's changes (file lock)."""
+    import asyncio
+
+    results = await asyncio.gather(
+        config_client.put("/api/v1/config", json={"port": 5555}, headers=root_headers()),
+        config_client.put("/api/v1/config", json={"workers": 4}, headers=root_headers()),
+    )
+    assert all(r.status_code == 200 for r in results)
+
+    disk = json.loads(ov_conf.read_text())
+    # Both changes should be present (order depends on lock acquisition)
+    assert disk["server"]["port"] == 5555
+    assert disk["server"]["workers"] == 4

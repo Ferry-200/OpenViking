@@ -2,10 +2,16 @@
 # SPDX-License-Identifier: AGPL-3.0
 """Configuration management endpoints for OpenViking HTTP Server."""
 
-import fcntl
+import contextlib
 import json
 import os
 import tempfile
+from pathlib import Path
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
 
 from pydantic import ValidationError
 
@@ -16,13 +22,28 @@ from openviking.server.config import ServerConfig, load_server_config
 from openviking.server.identity import RequestContext, Role
 from openviking.server.models import Response
 from openviking_cli.exceptions import InvalidArgumentError
-from openviking_cli.utils.config.config_loader import load_json_config, resolve_config_path
+from openviking_cli.utils.config.config_loader import resolve_config_path
 from openviking_cli.utils.config.consts import DEFAULT_OV_CONF, OPENVIKING_CONFIG_ENV
 from openviking_cli.utils import get_logger
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/api/v1/config", tags=["config"])
+
+
+@contextlib.contextmanager
+def _file_lock(path: Path):
+    """Acquire an exclusive file lock (no-op on platforms without fcntl).
+
+    Lock is released implicitly when the fd is closed on block exit.
+    """
+    if fcntl is None:
+        yield
+        return
+    lock_path = path.with_suffix(".lock")
+    with open(lock_path, "w") as lock_fd:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield
 
 
 def _sanitize_config(config: ServerConfig) -> dict:
@@ -60,10 +81,11 @@ async def update_config(
     for key in _IMMUTABLE_FIELDS:
         body.pop(key, None)
     path = resolve_config_path(None, OPENVIKING_CONFIG_ENV, DEFAULT_OV_CONF)
-    lock_path = path.with_suffix(".lock")
-    with open(lock_path, "w") as lock_fd:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-        full = load_json_config(path)
+    if path is None:
+        raise InvalidArgumentError("Configuration file not found")
+    with _file_lock(path):
+        # Read raw JSON without env var expansion to preserve $VAR references on write-back
+        full = json.loads(path.read_text(encoding="utf-8-sig"))
         # Merge onto disk state so consecutive partial PUTs accumulate
         current_server = full.get("server") or {}
         merged = {**current_server, **body}
@@ -90,4 +112,4 @@ async def update_config(
             raise
     logger.info("Configuration updated by %s, fields changed: %s, path: %s",
                 ctx.user, sorted(body.keys()), path)
-    return Response(status="ok", result=_sanitize_config(config))
+    return Response(status="ok", result=_sanitize_config(load_server_config()))
