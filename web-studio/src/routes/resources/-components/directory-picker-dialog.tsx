@@ -13,13 +13,19 @@ import {
 } from '#/components/ui/dialog'
 import { ScrollArea } from '#/components/ui/scroll-area'
 import { Spinner } from '#/components/ui/spinner'
-import {
-  type FsEntry,
-  getErrorMessage,
-  normalizeDirUri,
-  normalizeFsEntries,
-} from '#/lib/legacy/data-utils'
-import { getFsLs, getOvResult } from '#/lib/ov-client'
+import type { VikingFsEntry } from '../-types/viking-fm'
+import { normalizeDirUri, normalizeFsEntries } from '../-lib/normalize'
+import { getFsLs, getOvResult, isOvClientError } from '#/lib/ov-client'
+
+function getErrorMessage(error: unknown): string {
+  if (isOvClientError(error)) {
+    return `${error.code}: ${error.message}`
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return String(error)
+}
 
 interface DirectoryPickerDialogProps {
   open: boolean
@@ -51,7 +57,7 @@ export function DirectoryPickerDialog({
   value,
   onSelect,
 }: DirectoryPickerDialogProps) {
-  const { t } = useTranslation()
+  const { t } = useTranslation('addResource')
   const [browseUri, setBrowseUri] = useState(value)
 
   useEffect(() => {
@@ -74,7 +80,7 @@ export function DirectoryPickerDialog({
         }),
       )
       const entries = normalizeFsEntries(result, normalizedUri)
-      return entries.filter((e: FsEntry) => e.isDir)
+      return entries.filter((e: VikingFsEntry) => e.isDir)
     },
     enabled: open,
   })
@@ -85,7 +91,7 @@ export function DirectoryPickerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('addResource.dirPicker.title')}</DialogTitle>
+          <DialogTitle>{t('dirPicker.title')}</DialogTitle>
         </DialogHeader>
 
         {/* Breadcrumb */}
@@ -114,11 +120,11 @@ export function DirectoryPickerDialog({
             </div>
           ) : dirQuery.isError ? (
             <div className="px-4 py-8 text-center text-sm text-destructive">
-              {t('addResource.dirPicker.error')}: {getErrorMessage(dirQuery.error)}
+              {t('dirPicker.error')}: {getErrorMessage(dirQuery.error)}
             </div>
           ) : dirQuery.data && dirQuery.data.length > 0 ? (
             <div className="p-1">
-              {dirQuery.data.map((entry: FsEntry) => {
+              {dirQuery.data.map((entry: VikingFsEntry) => {
                 const name = entry.uri.replace(/\/$/, '').split('/').pop() || entry.uri
                 return (
                   <button
@@ -136,19 +142,19 @@ export function DirectoryPickerDialog({
           ) : (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground">
               <FolderOpen className="size-8" />
-              <p className="text-sm">{t('addResource.dirPicker.empty')}</p>
+              <p className="text-sm">{t('dirPicker.empty')}</p>
             </div>
           )}
         </ScrollArea>
 
         {/* Selected path */}
         <p className="truncate text-xs text-muted-foreground">
-          {t('addResource.dirPicker.selected')} <span className="font-mono">{normalizedUri}</span>
+          {t('dirPicker.selected')} <span className="font-mono">{normalizedUri}</span>
         </p>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('addResource.dirPicker.cancel')}
+            {t('dirPicker.cancel')}
           </Button>
           <Button
             onClick={() => {
@@ -156,7 +162,7 @@ export function DirectoryPickerDialog({
               onOpenChange(false)
             }}
           >
-            {t('addResource.dirPicker.select')}
+            {t('dirPicker.select')}
           </Button>
         </DialogFooter>
       </DialogContent>

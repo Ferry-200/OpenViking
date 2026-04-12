@@ -13,6 +13,9 @@ const en = {
       addResource: {
         title: 'Add Resource',
       },
+      fileSystem: {
+        title: 'File System',
+      },
       operations: {
         title: 'Operations',
       },
@@ -95,7 +98,7 @@ const en = {
     description: 'Upload a local file to the server. File type is auto-detected via magic bytes.',
     dropzone: {
       title: 'Drag & drop a file here, or click to select',
-      hint: 'Supports any file type. Only one file at a time.',
+      hint: 'Only one file at a time.',
       supportedFormats: 'Supports PDF, Word, PPT, Excel, Markdown, code files, images, and more',
     },
     fileInfo: {
@@ -105,9 +108,9 @@ const en = {
       unknown: 'Unknown type',
       remove: 'Remove',
     },
-    parentUri: 'Parent URI',
-    'parentUri.hint': 'Leave as viking://resources/ unless you need a different parent.',
-    'parentUri.browse': 'Browse',
+    targetUri: 'Target URI',
+    'targetUri.hint': 'Choose where to store this resource. Defaults to viking://resources/.',
+    'targetUri.browse': 'Browse',
     advancedOptions: 'Advanced Options',
     upload: 'Upload File',
     'upload.progress': 'Uploading... {{progress}}%',
@@ -118,7 +121,9 @@ const en = {
       skippedFiles: '{{count}} file(s) skipped (unsupported format)',
     },
     continueUpload: 'Continue Uploading',
+    cancelUpload: 'Cancel',
     success: 'Resource added successfully',
+    fileBlocked: '"{{name}}" is not a supported file type.',
     error: 'Request Failed',
     latestResult: {
       title: 'Latest Result',
@@ -142,12 +147,23 @@ const en = {
     'remoteUrl.placeholder': 'https://github.com/org/repo',
     'remoteUrl.hint': 'HTTP(S) URL, Git repository, or other remote resource address.',
     submit: 'Add Resource',
+    strict: 'Strict Mode',
+    'strict.hint': 'When enabled, the server will reject files with unsupported or unrecognized types instead of skipping them silently.',
     directlyUploadMedia: 'Directly Upload Media',
     'directlyUploadMedia.hint': 'When enabled, media files (images, audio, video) are stored as-is. When disabled, media files are processed through AI vision/audio pipeline for content extraction first.',
     reason: 'Reason',
     'reason.placeholder': 'Why are you adding this resource?',
     instruction: 'Instruction',
     'instruction.placeholder': 'Special processing instructions for this resource.',
+    directoryScan: {
+      title: 'Directory Scan Options',
+      ignoreDirs: 'Ignore Directories',
+      'ignoreDirs.placeholder': 'node_modules, .git, __pycache__',
+      include: 'Include Pattern',
+      'include.placeholder': '*.py, *.md',
+      exclude: 'Exclude Pattern',
+      'exclude.placeholder': '*.log, *.tmp',
+    },
   },
   resources: {
     page: {

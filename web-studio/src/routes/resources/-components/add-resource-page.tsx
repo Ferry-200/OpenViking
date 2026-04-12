@@ -1,45 +1,24 @@
-import { useMutation } from '@tanstack/react-query'
 import { fileTypeFromBlob } from 'file-type'
-import { AlertTriangle, CheckCircle2, ChevronRight, FileIcon, FolderOpen, Globe, Loader2Icon, Upload, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, FileIcon, FolderOpen, Globe, Info, Loader2Icon, Upload, X } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { Alert, AlertDescription, AlertTitle } from '#/components/ui/alert'
 import { Badge } from '#/components/ui/badge'
 import { Button } from '#/components/ui/button'
 import { Card, CardContent } from '#/components/ui/card'
 import { Checkbox } from '#/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/components/ui/collapsible'
-import { DirectoryPickerDialog } from '#/components/data/directory-picker-dialog'
+import { DirectoryPickerDialog } from './directory-picker-dialog'
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { Progress } from '#/components/ui/progress'
 import { Textarea } from '#/components/ui/textarea'
-import {
-  getOvResult,
-  isOvClientError,
-  postResources,
-  postResourcesTempUpload,
-} from '#/lib/ov-client'
+import { Tooltip, TooltipContent, TooltipTrigger } from '#/components/ui/tooltip'
+import { useResourceUpload } from '#/hooks/use-resource-upload'
 
 type Mode = 'upload' | 'remote'
-type UploadPhase = 'idle' | 'uploading' | 'processing' | 'done'
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function getErrorMessage(error: unknown): string {
-  if (isOvClientError(error)) {
-    return `${error.code}: ${error.message}`
-  }
-  if (error instanceof Error) {
-    return error.message
-  }
-  return String(error)
-}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -53,22 +32,59 @@ function getExtensionFromName(name: string): string {
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
+/**
+ * File extensions that the backend cannot process — pure binary or unsupported archives.
+ * Mirrors the subset of openviking/parse/parsers/constants.py IGNORE_EXTENSIONS
+ * that have NO dedicated parser registered in ParserRegistry.
+ */
+const BLOCKED_EXTENSIONS = new Set([
+  // Binary / compiled
+  '.pyc', '.pyo', '.pyd', '.so', '.dll', '.dylib', '.exe', '.bin',
+  // Disk images / databases
+  '.iso', '.img', '.db', '.sqlite',
+  // Archives without a parser (zip has ZipParser)
+  '.tar', '.gz', '.rar', '.7z',
+  // Java compiled
+  '.class', '.jar', '.war', '.ear',
+  // Misc unsupported
+  '.ico', '.wma', '.mid', '.midi',
+])
+
+function isBlockedFile(name: string): boolean {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return false
+  return BLOCKED_EXTENSIONS.has(name.slice(dot).toLowerCase())
+}
+
 export function AddResourcePage() {
   const { t } = useTranslation('addResource')
+  const { state: uploadState, startUpload, startRemote, reset, isActive } = useResourceUpload()
 
-  const [mode, setMode] = useState<Mode>('upload')
-  const [remoteUrl, setRemoteUrl] = useState('')
+  const [mode, setMode] = useState<Mode>(uploadState.mode)
+  const [remoteUrl, setRemoteUrl] = useState(uploadState.remoteUrl)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [detectedType, setDetectedType] = useState<string | null>(null)
-  const [parentUri, setParentUri] = useState('viking://resources/')
+  const [detectedType, setDetectedType] = useState<string | null>(uploadState.fileType)
+  const [targetUri, setTargetUri] = useState('viking://resources/')
+  const [strict, setStrict] = useState(false)
   const [directlyUploadMedia, setDirectlyUploadMedia] = useState(true)
   const [reason, setReason] = useState('')
   const [instruction, setInstruction] = useState('')
+  const [ignoreDirs, setIgnoreDirs] = useState('')
+  const [include, setInclude] = useState('')
+  const [exclude, setExclude] = useState('')
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [dirPickerOpen, setDirPickerOpen] = useState(false)
-  const [phase, setPhase] = useState<UploadPhase>('idle')
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [skippedFiles, setSkippedFiles] = useState<string[]>([])
+
+  const phase = uploadState.phase
+  const skippedFiles = uploadState.skippedFiles
+
+  // When an upload is active or done, use context state for display;
+  // the local selectedFile is only valid for idle state before submission.
+  const displayFileName = phase !== 'idle' && uploadState.mode === 'upload' ? uploadState.fileName : selectedFile?.name ?? null
+  const displayFileSize = phase !== 'idle' && uploadState.mode === 'upload' ? uploadState.fileSize : selectedFile?.size ?? null
+  const displayFileType = phase !== 'idle' && uploadState.mode === 'upload' ? uploadState.fileType : detectedType
+  const displayRemoteUrl = phase !== 'idle' && uploadState.mode === 'remote' ? uploadState.remoteUrl : remoteUrl
+  const activeMode = phase !== 'idle' ? uploadState.mode : mode
 
   const detectFileType = useCallback(async (file: File) => {
     try {
@@ -83,11 +99,15 @@ export function AddResourcePage() {
     (acceptedFiles: File[]) => {
       const file = acceptedFiles[0]
       if (file) {
+        if (isBlockedFile(file.name)) {
+          toast.error(t('fileBlocked', { name: file.name }))
+          return
+        }
         setSelectedFile(file)
         detectFileType(file)
       }
     },
-    [detectFileType],
+    [detectFileType, t],
   )
 
   const removeFile = useCallback(() => {
@@ -102,8 +122,8 @@ export function AddResourcePage() {
 
   const buildCommonBody = () => {
     const body: Record<string, unknown> = {
-      parent: parentUri.trim() || undefined,
-      strict: false,
+      parent: targetUri.trim() || undefined,
+      strict,
       telemetry: true,
       wait: true,
       directly_upload_media: directlyUploadMedia,
@@ -114,126 +134,47 @@ export function AddResourcePage() {
     if (instruction.trim()) {
       body.instruction = instruction.trim()
     }
+    if (mode === 'remote') {
+      if (ignoreDirs.trim()) {
+        body.ignore_dirs = ignoreDirs.trim()
+      }
+      if (include.trim()) {
+        body.include = include.trim()
+      }
+      if (exclude.trim()) {
+        body.exclude = exclude.trim()
+      }
+    }
     return body
   }
 
-  const resetUploadState = useCallback(() => {
-    setPhase('idle')
-    setUploadProgress(0)
-    setSkippedFiles([])
+  const handleSubmit = () => {
+    if (mode === 'upload') {
+      if (!selectedFile) return
+      startUpload({ file: selectedFile, fileType: detectedType, commonBody: buildCommonBody() })
+    } else {
+      const url = remoteUrl.trim()
+      if (!url) return
+      startRemote({ url, commonBody: buildCommonBody() })
+    }
+  }
+
+  const handleReset = () => {
+    reset()
     setSelectedFile(null)
     setDetectedType(null)
-  }, [])
+    setRemoteUrl('')
+    setMode('upload')
+  }
 
-  const addResourceMutation = useMutation({
-    mutationFn: async () => {
-      if (mode === 'upload') {
-        if (!selectedFile) {
-          throw new Error('Please select a file first.')
-        }
-
-        setPhase('uploading')
-        setUploadProgress(0)
-
-        const uploadResult = await getOvResult(
-          postResourcesTempUpload({
-            body: {
-              file: selectedFile,
-              telemetry: true,
-            },
-            onUploadProgress: (event: { loaded: number; total?: number }) => {
-              if (event.total) {
-                setUploadProgress(Math.round((event.loaded / event.total) * 100))
-              }
-            },
-          }),
-        )
-
-        const tempFileId = isRecord(uploadResult)
-          ? uploadResult.temp_file_id
-          : undefined
-        if (typeof tempFileId !== 'string' || !tempFileId.trim()) {
-          throw new Error('Temp upload did not return temp_file_id.')
-        }
-
-        setPhase('processing')
-
-        const addResourceResult = await getOvResult(
-          postResources({
-            body: {
-              ...buildCommonBody(),
-              temp_file_id: tempFileId,
-              source_name: selectedFile.name,
-            } as Parameters<typeof postResources>[0]['body'],
-          }),
-        )
-
-        // Extract warnings (skipped files) from result
-        if (isRecord(addResourceResult) && Array.isArray(addResourceResult.warnings)) {
-          setSkippedFiles(addResourceResult.warnings as string[])
-        }
-        setPhase('done')
-
-        return {
-          add_resource: addResourceResult,
-          upload: uploadResult,
-        }
-      }
-
-      // remote mode
-      const url = remoteUrl.trim()
-      if (!url) {
-        throw new Error('Please enter a remote URL.')
-      }
-
-      setPhase('processing')
-
-      const result = await getOvResult(
-        postResources({
-          body: {
-            ...buildCommonBody(),
-            path: url,
-          } as Parameters<typeof postResources>[0]['body'],
-        }),
-      )
-
-      if (isRecord(result) && Array.isArray(result.warnings)) {
-        setSkippedFiles(result.warnings as string[])
-      }
-      setPhase('done')
-
-      return { add_resource: result }
-    },
-    onError: (error) => {
-      setPhase('idle')
-      const message = getErrorMessage(error)
-      toast.error(message)
-    },
-    onSuccess: () => {
-      toast.success(t('success'))
-    },
-  })
-
-  const activeError = addResourceMutation.error
   const fileTypeLabel =
-    detectedType ?? (selectedFile ? getExtensionFromName(selectedFile.name) || t('fileInfo.unknown') : null)
+    displayFileType ?? (displayFileName ? getExtensionFromName(displayFileName) || t('fileInfo.unknown') : null)
 
   const canSubmit =
     mode === 'upload' ? !!selectedFile : !!remoteUrl.trim()
 
   return (
     <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold tracking-tight">{t('title')}</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">{t('description')}</p>
-      </header>
-      {activeError ? (
-        <Alert variant="destructive">
-          <Upload className="size-4" />
-          <AlertTitle>{t('error')}</AlertTitle>
-          <AlertDescription>{getErrorMessage(activeError)}</AlertDescription>
-        </Alert>
-      ) : null}
 
       <div className="max-w-4xl">
         <Card>
@@ -242,11 +183,12 @@ export function AddResourcePage() {
             <div className="flex gap-1 rounded-lg bg-muted p-1">
               <button
                 type="button"
+                disabled={phase !== 'idle'}
                 className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  mode === 'upload'
+                  activeMode === 'upload'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
-                }`}
+                } ${phase !== 'idle' ? 'cursor-not-allowed opacity-60' : ''}`}
                 onClick={() => setMode('upload')}
               >
                 <Upload className="size-4" />
@@ -254,11 +196,12 @@ export function AddResourcePage() {
               </button>
               <button
                 type="button"
+                disabled={phase !== 'idle'}
                 className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-                  mode === 'remote'
+                  activeMode === 'remote'
                     ? 'bg-background text-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
-                }`}
+                } ${phase !== 'idle' ? 'cursor-not-allowed opacity-60' : ''}`}
                 onClick={() => setMode('remote')}
               >
                 <Globe className="size-4" />
@@ -267,28 +210,32 @@ export function AddResourcePage() {
             </div>
 
             {/* Upload Mode: Dropzone */}
-            {mode === 'upload' ? (
+            {activeMode === 'upload' ? (
               <div
-                {...getRootProps()}
-                className={`relative cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
-                  isDragActive
-                    ? 'border-primary bg-primary/5'
-                    : selectedFile
-                      ? 'border-border bg-muted/20'
-                      : 'border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
+                {...(phase === 'idle' ? getRootProps() : {})}
+                className={`relative rounded-lg border-2 border-dashed p-8 text-center transition-colors ${
+                  phase !== 'idle'
+                    ? 'cursor-default border-border bg-muted/20'
+                    : isDragActive
+                      ? 'cursor-pointer border-primary bg-primary/5'
+                      : displayFileName
+                        ? 'cursor-pointer border-border bg-muted/20'
+                        : 'cursor-pointer border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/30'
                 }`}
               >
-                <input {...getInputProps()} />
+                {phase === 'idle' && <input {...getInputProps()} />}
 
-                {selectedFile ? (
+                {displayFileName ? (
                   <div className="flex items-center gap-4 text-left">
                     <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-muted">
                       <FileIcon className="size-6 text-muted-foreground" />
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="truncate text-sm font-medium">{selectedFile.name}</p>
+                      <p className="truncate text-sm font-medium">{displayFileName}</p>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{formatFileSize(selectedFile.size)}</span>
+                        {displayFileSize != null && (
+                          <span className="text-xs text-muted-foreground">{formatFileSize(displayFileSize)}</span>
+                        )}
                         {fileTypeLabel ? (
                           <Badge variant="secondary" className="text-xs">
                             {fileTypeLabel}
@@ -296,19 +243,21 @@ export function AddResourcePage() {
                         ) : null}
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-8 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeFile()
-                      }}
-                      aria-label={t('fileInfo.remove')}
-                    >
-                      <X className="size-4" />
-                    </Button>
+                    {phase === 'idle' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeFile()
+                        }}
+                        aria-label={t('fileInfo.remove')}
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -326,8 +275,9 @@ export function AddResourcePage() {
                 <Input
                   id="add-resource-remote-url"
                   placeholder={t('remoteUrl.placeholder')}
-                  value={remoteUrl}
+                  value={displayRemoteUrl}
                   onChange={(e) => setRemoteUrl(e.target.value)}
+                  disabled={phase !== 'idle'}
                 />
                 <p className="text-xs text-muted-foreground">{t('remoteUrl.hint')}</p>
               </div>
@@ -336,11 +286,14 @@ export function AddResourcePage() {
             {/* Upload Progress / Processing / Result */}
             {phase === 'uploading' && (
               <div className="space-y-2">
-                <Progress value={uploadProgress}>
+                <Progress value={uploadState.progress}>
                   <span className="text-sm text-muted-foreground">
-                    {t('upload.progress', { progress: uploadProgress })}
+                    {t('upload.progress', { progress: uploadState.progress })}
                   </span>
                 </Progress>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  {t('cancelUpload')}
+                </Button>
               </div>
             )}
 
@@ -353,6 +306,9 @@ export function AddResourcePage() {
                     {t('upload.processing')}
                   </p>
                 </div>
+                <Button variant="outline" size="sm" onClick={handleReset}>
+                  {t('cancelUpload')}
+                </Button>
               </div>
             )}
 
@@ -383,12 +339,37 @@ export function AddResourcePage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={resetUploadState}
+                  onClick={handleReset}
                 >
                   {t('continueUpload')}
                 </Button>
               </div>
             )}
+
+            {/* Target URI */}
+            <div className="space-y-2">
+              <Label htmlFor="add-resource-target">{t('targetUri')}</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="add-resource-target"
+                  placeholder="viking://resources/"
+                  value={targetUri}
+                  onChange={(event) => setTargetUri(event.target.value)}
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => setDirPickerOpen(true)}
+                >
+                  <FolderOpen className="mr-1.5 size-4" />
+                  {t('targetUri.browse')}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">{t('targetUri.hint')}</p>
+            </div>
 
             {/* Advanced Options */}
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
@@ -400,39 +381,58 @@ export function AddResourcePage() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="mt-3 space-y-4 rounded-lg border border-border/50 bg-muted/10 p-4">
-                  {/* Parent URI */}
-                  <div className="space-y-2">
-                    <Label htmlFor="add-resource-parent">{t('parentUri')}</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="add-resource-parent"
-                        placeholder="viking://resources/"
-                        value={parentUri}
-                        onChange={(event) => setParentUri(event.target.value)}
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => setDirPickerOpen(true)}
-                      >
-                        <FolderOpen className="mr-1.5 size-4" />
-                        {t('parentUri.browse')}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">{t('parentUri.hint')}</p>
-                  </div>
-
                   {/* Checkboxes */}
                   <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                     <Label className="flex items-center gap-2">
+                      <Checkbox checked={strict} onCheckedChange={(checked) => setStrict(Boolean(checked))} />
+                      <span>{t('strict')}</span>
+                      <Tooltip>
+                        <TooltipTrigger render={<Info className="size-3.5 text-muted-foreground" />} />
+                        <TooltipContent>{t('strict.hint')}</TooltipContent>
+                      </Tooltip>
+                    </Label>
+                    <Label className="flex items-center gap-2">
                       <Checkbox checked={directlyUploadMedia} onCheckedChange={(checked) => setDirectlyUploadMedia(Boolean(checked))} />
                       <span>{t('directlyUploadMedia')}</span>
+                      <Tooltip>
+                        <TooltipTrigger render={<Info className="size-3.5 text-muted-foreground" />} />
+                        <TooltipContent>{t('directlyUploadMedia.hint')}</TooltipContent>
+                      </Tooltip>
                     </Label>
                   </div>
-                  <p className="text-xs text-muted-foreground">{t('directlyUploadMedia.hint')}</p>
+
+                  {/* Directory scan params (remote mode only) */}
+                  {activeMode === 'remote' && (
+                    <div className="space-y-4 border-t border-border/50 pt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="add-resource-ignore-dirs">{t('directoryScan.ignoreDirs')}</Label>
+                        <Input
+                          id="add-resource-ignore-dirs"
+                          placeholder={t('directoryScan.ignoreDirs.placeholder')}
+                          value={ignoreDirs}
+                          onChange={(e) => setIgnoreDirs(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-resource-include">{t('directoryScan.include')}</Label>
+                        <Input
+                          id="add-resource-include"
+                          placeholder={t('directoryScan.include.placeholder')}
+                          value={include}
+                          onChange={(e) => setInclude(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="add-resource-exclude">{t('directoryScan.exclude')}</Label>
+                        <Input
+                          id="add-resource-exclude"
+                          placeholder={t('directoryScan.exclude.placeholder')}
+                          value={exclude}
+                          onChange={(e) => setExclude(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   {/* Reason */}
                   <div className="space-y-2">
@@ -461,10 +461,10 @@ export function AddResourcePage() {
 
             {phase === 'idle' && (
               <Button
-                onClick={() => addResourceMutation.mutate()}
-                disabled={!canSubmit || addResourceMutation.isPending}
+                onClick={handleSubmit}
+                disabled={!canSubmit || isActive}
               >
-                {addResourceMutation.isPending
+                {isActive
                   ? t('uploading')
                   : mode === 'upload'
                     ? t('upload')
@@ -478,8 +478,8 @@ export function AddResourcePage() {
       <DirectoryPickerDialog
         open={dirPickerOpen}
         onOpenChange={setDirPickerOpen}
-        value={parentUri}
-        onSelect={setParentUri}
+        value={targetUri}
+        onSelect={setTargetUri}
       />
     </div>
   )

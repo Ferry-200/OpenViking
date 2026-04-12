@@ -13,6 +13,9 @@ const zhCN = {
       addResource: {
         title: '添加资源',
       },
+      fileSystem: {
+        title: '文件系统',
+      },
       operations: {
         title: '运维',
       },
@@ -95,7 +98,7 @@ const zhCN = {
     description: '上传本地文件到服务器，文件类型通过 magic bytes 自动检测。',
     dropzone: {
       title: '拖拽文件到此处，或点击选择文件',
-      hint: '支持任意文件类型，每次只能上传一个文件。',
+      hint: '每次只能上传一个文件。',
       supportedFormats: '支持 PDF、Word、PPT、Excel、Markdown、代码文件、图片等',
     },
     fileInfo: {
@@ -105,9 +108,9 @@ const zhCN = {
       unknown: '未知类型',
       remove: '移除',
     },
-    parentUri: '父级 URI',
-    'parentUri.hint': '如无特殊需要，保持默认值 viking://resources/ 即可。',
-    'parentUri.browse': '浏览',
+    targetUri: '目标 URI',
+    'targetUri.hint': '选择资源的存储位置，默认为 viking://resources/。',
+    'targetUri.browse': '浏览',
     advancedOptions: '高级选项',
     upload: '上传文件',
     'upload.progress': '正在上传... {{progress}}%',
@@ -118,7 +121,9 @@ const zhCN = {
       skippedFiles: '{{count}} 个文件被跳过（不支持的格式）',
     },
     continueUpload: '继续上传',
+    cancelUpload: '取消',
     success: '资源添加成功',
+    fileBlocked: '"{{name}}" 不是支持的文件类型。',
     error: '请求失败',
     latestResult: {
       title: '最新结果',
@@ -142,12 +147,23 @@ const zhCN = {
     'remoteUrl.placeholder': 'https://github.com/org/repo',
     'remoteUrl.hint': 'HTTP(S) 链接、Git 仓库地址或其他远程资源地址。',
     submit: '添加资源',
+    strict: '严格模式',
+    'strict.hint': '开启时，服务器会拒绝不支持或无法识别类型的文件，而非静默跳过。',
     directlyUploadMedia: '直接上传媒体文件',
     'directlyUploadMedia.hint': '开启时，媒体文件（图片、音频、视频）原样存储。关闭后，媒体文件会先通过 AI 视觉/音频管道提取内容再存储。',
     reason: '添加原因',
     'reason.placeholder': '为什么要添加这个资源？',
     instruction: '处理指令',
     'instruction.placeholder': '针对该资源的特殊处理指令。',
+    directoryScan: {
+      title: '目录扫描选项',
+      ignoreDirs: '忽略目录',
+      'ignoreDirs.placeholder': 'node_modules, .git, __pycache__',
+      include: '包含模式',
+      'include.placeholder': '*.py, *.md',
+      exclude: '排除模式',
+      'exclude.placeholder': '*.log, *.tmp',
+    },
   },
   resources: {
     page: {
