@@ -60,8 +60,9 @@ export function Composer({
     <div className="px-4 pb-4 pt-2">
       <div
         className={cn(
-          'mx-auto w-full max-w-3xl rounded-2xl border border-border/50 bg-background/95',
+          'mx-auto w-full max-w-3xl rounded-2xl border border-border/50 bg-background/95 transition-shadow duration-200',
           'shadow-lg shadow-black/8 dark:shadow-black/25',
+          'has-[:focus]:shadow-xl has-[:focus]:shadow-primary/5 has-[:focus]:border-primary/30',
         )}
       >
         {/* Attachment preview */}
@@ -154,7 +155,7 @@ export function Composer({
               className={cn(
                 'inline-flex size-8 items-center justify-center rounded-lg',
                 'bg-destructive text-destructive-foreground',
-                'transition-colors hover:bg-destructive/90',
+                'transition-all hover:bg-destructive/90 active:scale-90',
               )}
             >
               <SquareIcon className="size-3.5" />
@@ -167,7 +168,7 @@ export function Composer({
               className={cn(
                 'inline-flex size-8 items-center justify-center rounded-lg',
                 'bg-primary text-primary-foreground',
-                'transition-colors hover:bg-primary/90 disabled:opacity-30',
+                'transition-all hover:bg-primary/90 active:scale-90 disabled:opacity-30',
               )}
             >
               <ArrowUpIcon className="size-3.5" />

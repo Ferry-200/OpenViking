@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from 'react'
 import { CheckIcon, CopyIcon, FileIcon, ImageIcon, UserIcon } from 'lucide-react'
 
+import { cn } from '#/lib/utils'
 import type { Message } from '#/routes/sessions/-types/message'
 import type { StreamToolCall } from '#/routes/sessions/-types/chat'
 import { MarkdownContent, ReasoningBlock, ToolCallBlock } from './message-parts'
@@ -22,7 +23,11 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all group-hover/msg:opacity-100 hover:bg-accent hover:text-accent-foreground"
+      className={cn(
+        'inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/50 transition-all',
+        'opacity-0 group-hover/msg:opacity-100 hover:bg-accent hover:text-accent-foreground',
+        copied && 'text-primary animate-copy-success',
+      )}
       title="复制"
     >
       {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
@@ -58,10 +63,10 @@ function formatRelativeTime(iso: string): string {
 
 function TypingIndicator() {
   return (
-    <div className="flex items-center gap-1 py-1">
-      <span className="size-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:0ms]" />
-      <span className="size-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:150ms]" />
-      <span className="size-1.5 rounded-full bg-muted-foreground/40 animate-bounce [animation-delay:300ms]" />
+    <div className="flex items-center gap-1.5 py-1">
+      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot" />
+      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot [animation-delay:200ms]" />
+      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot [animation-delay:400ms]" />
     </div>
   )
 }
@@ -150,7 +155,7 @@ const UserMessage = memo(function UserMessage({
   const previewUrl = parsed ? attachmentPreviews?.get(parsed.tempFileId) : undefined
 
   return (
-    <div className={`group/msg flex w-full max-w-3xl gap-3 justify-end ${compact ? 'mb-1.5' : 'mb-5'}`}>
+    <div className={`group/msg animate-msg-right flex w-full max-w-3xl gap-3 justify-end ${compact ? 'mb-1.5' : 'mb-5'}`}>
       <div className="flex items-end gap-1.5 self-end">
         <span className="text-[10px] text-muted-foreground/40 opacity-0 transition-opacity group-hover/msg:opacity-100 select-none">
           {formatRelativeTime(message.created_at)}
@@ -207,7 +212,7 @@ const AssistantMessage = memo(function AssistantMessage({
   const textContent = getTextFromParts(message)
 
   return (
-    <div className={`group/msg flex w-full max-w-3xl gap-3 items-start ${compact ? 'mb-1.5' : 'mb-5'}`}>
+    <div className={`group/msg animate-msg-left flex w-full max-w-3xl gap-3 items-start ${compact ? 'mb-1.5' : 'mb-5'}`}>
       {!compact ? <BotAvatar /> : <div className="w-7 shrink-0" />}
       <div className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30">
         {message.parts.map((part, i) => {
@@ -258,7 +263,7 @@ function StreamingAssistantMessage({
   const hasContent = content || toolCalls.length > 0 || reasoning
 
   return (
-    <div className="mb-5 flex w-full max-w-3xl gap-3 items-start">
+    <div className="mb-5 animate-msg-left flex w-full max-w-3xl gap-3 items-start">
       <BotAvatar />
       <div className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30">
         {iteration > 1 && (
