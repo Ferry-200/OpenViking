@@ -150,7 +150,7 @@ function NavGroupItem({ item, pathname, title, t }: NavGroupItemProps) {
       <SidebarMenuItem>
         <CollapsibleTrigger
           render={
-            <SidebarMenuButton tooltip={title}>
+            <SidebarMenuButton tooltip={title} className='text-base'>
               <Icon />
               <span>{title}</span>
               <ChevronRightIcon className='ml-auto transition-transform duration-200 group-data-[open]/collapsible:rotate-90' />
