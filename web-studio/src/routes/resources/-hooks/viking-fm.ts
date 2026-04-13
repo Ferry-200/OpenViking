@@ -1,9 +1,10 @@
-import { useMemo, useRef, useCallback } from 'react'
+import { useMemo, useRef, useCallback, useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { fetchFileContent, fetchFsList, fetchFsTree } from '../-lib/api'
+import { fetchFileContent, fetchFind, fetchFindAllTypes, fetchFsList, fetchFsStat, fetchFsTree } from '../-lib/api'
 import { detectFileType, normalizeDirUri, shouldAutoRead } from '../-lib/normalize'
 import type {
+  GroupedFindResult,
   VikingFsEntry,
   VikingListQueryOptions,
   VikingPreviewPolicy,
@@ -17,10 +18,11 @@ const DEFAULT_QUERY_OPTS = { staleTime: 30_000 }
 const PREFETCH_OPTS = { output: 'agent' as const, showAllHidden: true, nodeLimit: 200 }
 const PREFETCH_STALE = 60_000
 
-export function useVikingFsList(uri: string, options: VikingListQueryOptions = {}) {
+export function useVikingFsList(uri: string, options: VikingListQueryOptions = {}, enabled = true) {
   return useQuery({
     queryKey: ['viking-fs-ls', normalizeDirUri(uri), options],
     queryFn: () => fetchFsList(normalizeDirUri(uri), options),
+    enabled,
     ...DEFAULT_QUERY_OPTS,
   })
 }
@@ -61,10 +63,10 @@ export function useVikingFilePreview(
 ) {
   const maxAutoReadBytes = policy.maxAutoReadBytes ?? 2 * 1024 * 1024
   const defaultReadLimit = policy.defaultReadLimit ?? 500
-  const effectiveReadOptions = {
+  const effectiveReadOptions = useMemo(() => ({
     offset: readOptions.offset ?? 0,
     limit: readOptions.limit ?? defaultReadLimit,
-  }
+  }), [readOptions.offset, readOptions.limit, defaultReadLimit])
 
   const autoRead = useMemo(
     () =>
@@ -146,4 +148,38 @@ export function useInvalidateVikingFs() {
         queryKey: uri ? ['viking-file-read', uri] : ['viking-file-read'],
       }),
   }
+}
+
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timer)
+  }, [value, delay])
+  return debounced
+}
+
+export function useVikingFind(query: string, targetUri?: string) {
+  const debouncedQuery = useDebouncedValue(query, 300)
+  const isRoot = !targetUri || targetUri === 'viking://'
+  return useQuery<GroupedFindResult>({
+    queryKey: ['viking-find', debouncedQuery, targetUri],
+    queryFn: () =>
+      isRoot
+        ? fetchFindAllTypes(debouncedQuery)
+        : fetchFind(debouncedQuery, { targetUri }),
+    enabled: debouncedQuery.trim().length > 0,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    placeholderData: (prev) => prev,
+  })
+}
+
+export function useVikingFsStat(uri: string | undefined) {
+  return useQuery<VikingFsEntry>({
+    queryKey: ['viking-fs-stat', uri],
+    queryFn: () => fetchFsStat(uri!),
+    enabled: Boolean(uri),
+    staleTime: 60_000,
+  })
 }
