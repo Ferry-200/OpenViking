@@ -1,10 +1,18 @@
 import { memo, useCallback, useState } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { CheckIcon, CopyIcon, FileIcon, ImageIcon, UserIcon } from 'lucide-react'
 
 import { cn } from '#/lib/utils'
 import type { Message } from '#/routes/sessions/-types/message'
 import type { StreamToolCall } from '#/routes/sessions/-types/chat'
 import { MarkdownContent, ReasoningBlock, ToolCallBlock } from './message-parts'
+
+// ---------------------------------------------------------------------------
+// Spring configs
+// ---------------------------------------------------------------------------
+
+const springEnter = { type: 'spring' as const, stiffness: 380, damping: 30, mass: 0.8 }
+const springBubble = { type: 'spring' as const, stiffness: 300, damping: 24, mass: 0.6 }
 
 // ---------------------------------------------------------------------------
 // CopyButton
@@ -26,11 +34,33 @@ function CopyButton({ text }: { text: string }) {
       className={cn(
         'inline-flex size-6 items-center justify-center rounded-md text-muted-foreground/50 transition-all',
         'opacity-0 group-hover/msg:opacity-100 hover:bg-accent hover:text-accent-foreground',
-        copied && 'text-primary animate-copy-success',
+        copied && 'text-primary',
       )}
       title="复制"
     >
-      {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+      <AnimatePresence mode="wait" initial={false}>
+        {copied ? (
+          <motion.span
+            key="check"
+            initial={{ scale: 0, rotate: -90 }}
+            animate={{ scale: 1, rotate: 0 }}
+            exit={{ scale: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+          >
+            <CheckIcon className="size-3" />
+          </motion.span>
+        ) : (
+          <motion.span
+            key="copy"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            exit={{ scale: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <CopyIcon className="size-3" />
+          </motion.span>
+        )}
+      </AnimatePresence>
     </button>
   )
 }
@@ -58,21 +88,31 @@ function formatRelativeTime(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// TypingIndicator
+// TypingIndicator — spring-based dots
 // ---------------------------------------------------------------------------
 
 function TypingIndicator() {
   return (
     <div className="flex items-center gap-1.5 py-1">
-      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot" />
-      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot [animation-delay:200ms]" />
-      <span className="size-1.5 rounded-full bg-primary/50 animate-typing-dot [animation-delay:400ms]" />
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          className="size-1.5 rounded-full bg-primary/50"
+          animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+          transition={{
+            duration: 1.2,
+            repeat: Infinity,
+            delay: i * 0.2,
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// BotAvatar — product brand avatar
+// BotAvatar
 // ---------------------------------------------------------------------------
 
 function BotAvatar() {
@@ -136,7 +176,7 @@ export function MessageList({ messages, attachmentPreviews, streaming }: Message
 }
 
 // ---------------------------------------------------------------------------
-// UserMessage
+// UserMessage — spring entrance from right
 // ---------------------------------------------------------------------------
 
 const UserMessage = memo(function UserMessage({
@@ -149,13 +189,18 @@ const UserMessage = memo(function UserMessage({
   attachmentPreviews?: Map<string, string>
 }) {
   const rawText = getTextFromParts(message)
-
   const parsed = parseAttachment(rawText)
   const text = parsed ? parsed.rest : rawText
   const previewUrl = parsed ? attachmentPreviews?.get(parsed.tempFileId) : undefined
 
   return (
-    <div className={`group/msg animate-msg-right flex w-full max-w-3xl gap-3 justify-end ${compact ? 'mb-1.5' : 'mb-5'}`}>
+    <motion.div
+      className={`group/msg chat-scroll-reveal flex w-full max-w-3xl gap-3 justify-end ${compact ? 'mb-1.5' : 'mb-5'}`}
+      initial={{ opacity: 0, x: 20, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={springEnter}
+      layout
+    >
       <div className="flex items-end gap-1.5 self-end">
         <span className="text-[10px] text-muted-foreground/40 opacity-0 transition-opacity group-hover/msg:opacity-100 select-none">
           {formatRelativeTime(message.created_at)}
@@ -166,18 +211,10 @@ const UserMessage = memo(function UserMessage({
         {parsed && (
           <div className="overflow-hidden rounded-2xl rounded-tr-sm border border-primary/20 bg-primary/90 shadow-sm">
             {previewUrl && isImageFile(parsed.fileName) ? (
-              <img
-                src={previewUrl}
-                alt={parsed.fileName}
-                className="max-h-64 w-full object-cover"
-              />
+              <img src={previewUrl} alt={parsed.fileName} className="max-h-64 w-full object-cover" />
             ) : null}
             <div className="flex items-center gap-2 px-3 py-2 text-xs text-primary-foreground/80">
-              {isImageFile(parsed.fileName) ? (
-                <ImageIcon className="size-3.5 shrink-0" />
-              ) : (
-                <FileIcon className="size-3.5 shrink-0" />
-              )}
+              {isImageFile(parsed.fileName) ? <ImageIcon className="size-3.5 shrink-0" /> : <FileIcon className="size-3.5 shrink-0" />}
               <span className="min-w-0 flex-1 truncate">{parsed.fileName}</span>
             </div>
           </div>
@@ -188,18 +225,19 @@ const UserMessage = memo(function UserMessage({
           </div>
         )}
       </div>
-      {!compact && (
+      {!compact ? (
         <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
           <UserIcon className="size-3.5 text-primary" />
         </div>
+      ) : (
+        <div className="w-7 shrink-0" />
       )}
-      {compact && <div className="w-7 shrink-0" />}
-    </div>
+    </motion.div>
   )
 })
 
 // ---------------------------------------------------------------------------
-// AssistantMessage (completed)
+// AssistantMessage — spring entrance from left + bubble grow
 // ---------------------------------------------------------------------------
 
 const AssistantMessage = memo(function AssistantMessage({
@@ -212,9 +250,20 @@ const AssistantMessage = memo(function AssistantMessage({
   const textContent = getTextFromParts(message)
 
   return (
-    <div className={`group/msg animate-msg-left flex w-full max-w-3xl gap-3 items-start ${compact ? 'mb-1.5' : 'mb-5'}`}>
+    <motion.div
+      className={`group/msg chat-scroll-reveal flex w-full max-w-3xl gap-3 items-start ${compact ? 'mb-1.5' : 'mb-5'}`}
+      initial={{ opacity: 0, x: -20, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={springEnter}
+      layout
+    >
       {!compact ? <BotAvatar /> : <div className="w-7 shrink-0" />}
-      <div className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30">
+      <motion.div
+        className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30"
+        initial={{ scaleY: 0.8, originY: 0 }}
+        animate={{ scaleY: 1 }}
+        transition={springBubble}
+      >
         {message.parts.map((part, i) => {
           switch (part.type) {
             case 'text':
@@ -234,19 +283,19 @@ const AssistantMessage = memo(function AssistantMessage({
               return null
           }
         })}
-      </div>
+      </motion.div>
       <div className="flex items-end gap-1.5 self-end">
         <CopyButton text={textContent} />
         <span className="text-[10px] text-muted-foreground/40 opacity-0 transition-opacity group-hover/msg:opacity-100 select-none">
           {formatRelativeTime(message.created_at)}
         </span>
       </div>
-    </div>
+    </motion.div>
   )
 })
 
 // ---------------------------------------------------------------------------
-// StreamingAssistantMessage (in-flight)
+// StreamingAssistantMessage — entrance + live bubble
 // ---------------------------------------------------------------------------
 
 function StreamingAssistantMessage({
@@ -263,15 +312,29 @@ function StreamingAssistantMessage({
   const hasContent = content || toolCalls.length > 0 || reasoning
 
   return (
-    <div className="mb-5 animate-msg-left flex w-full max-w-3xl gap-3 items-start">
+    <motion.div
+      className="mb-5 flex w-full max-w-3xl gap-3 items-start"
+      initial={{ opacity: 0, x: -20, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={springEnter}
+    >
       <BotAvatar />
-      <div className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30">
+      <motion.div
+        className="max-w-full min-w-0 flex-1 rounded-2xl rounded-tl-sm bg-background/95 px-4 py-3 text-sm shadow-sm ring-1 ring-border/30"
+        layout
+        transition={{ layout: { type: 'spring', stiffness: 300, damping: 30 } }}
+      >
         {iteration > 1 && (
-          <div className="mb-2">
+          <motion.div
+            className="mb-2"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+          >
             <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary">
               第 {iteration} 轮
             </span>
-          </div>
+          </motion.div>
         )}
 
         <ReasoningBlock reasoning={reasoning} isRunning />
@@ -299,7 +362,7 @@ function StreamingAssistantMessage({
         ) : !hasContent ? (
           <TypingIndicator />
         ) : null}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
