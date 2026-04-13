@@ -36,18 +36,29 @@ export function Thread({ sessionId }: ThreadProps) {
   // ---- Send animation: layoutId FLIP ----
   const [sendingText, setSendingText] = useState<string | null>(null)
   const [sendingMessageId, setSendingMessageId] = useState<string | null>(null)
-  const prevMessagesLenRef = useRef(chat.messages.length)
+  const pendingSendRef = useRef<string | null>(null)
 
-  // When a new user message appears, transfer layoutId from phantom → bubble
+  // Step 2: After phantom renders, actually send the message
+  useEffect(() => {
+    if (!sendingText || !pendingSendRef.current) return
+    const text = pendingSendRef.current
+    pendingSendRef.current = null
+    // Wait one frame so phantom is painted, then send
+    const raf = requestAnimationFrame(() => {
+      chat.send(text)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [sendingText, chat])
+
+  // Step 3: When the new user message appears in messages[], transfer layoutId
+  const prevMessagesLenRef = useRef(chat.messages.length)
   useEffect(() => {
     const len = chat.messages.length
     if (len > prevMessagesLenRef.current && sendingText) {
       const lastMsg = chat.messages[len - 1]
       if (lastMsg?.role === 'user') {
-        // Remove phantom immediately so layoutId transfers to the new bubble
         setSendingText(null)
         setSendingMessageId(lastMsg.id)
-        // Clear layoutId from bubble after animation settles
         const timer = setTimeout(() => setSendingMessageId(null), 600)
         prevMessagesLenRef.current = len
         return () => clearTimeout(timer)
@@ -68,12 +79,12 @@ export function Thread({ sessionId }: ThreadProps) {
         clearAttachment()
       }
       if (text.trim()) {
-        // Show phantom in composer before message appears in list
+        // Step 1: Show phantom, defer actual send
+        pendingSendRef.current = text
         setSendingText(message.trim())
-        chat.send(text)
       }
     },
-    [attachment, clearAttachment, chat],
+    [attachment, clearAttachment],
   )
 
   // ---- Auto-scroll ----
