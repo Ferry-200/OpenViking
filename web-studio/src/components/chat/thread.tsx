@@ -38,22 +38,23 @@ export function Thread({ sessionId }: ThreadProps) {
   const [sendingMessageId, setSendingMessageId] = useState<string | null>(null)
   const prevMessagesLenRef = useRef(chat.messages.length)
 
-  // When a new user message appears in chat.messages, link it to the phantom
+  // When a new user message appears, transfer layoutId from phantom → bubble
   useEffect(() => {
-    if (chat.messages.length > prevMessagesLenRef.current && sendingText) {
-      const lastMsg = chat.messages[chat.messages.length - 1]
+    const len = chat.messages.length
+    if (len > prevMessagesLenRef.current && sendingText) {
+      const lastMsg = chat.messages[len - 1]
       if (lastMsg?.role === 'user') {
+        // Remove phantom immediately so layoutId transfers to the new bubble
+        setSendingText(null)
         setSendingMessageId(lastMsg.id)
-        // Clear the phantom after animation completes
-        const timer = setTimeout(() => {
-          setSendingText(null)
-          setSendingMessageId(null)
-        }, 500)
+        // Clear layoutId from bubble after animation settles
+        const timer = setTimeout(() => setSendingMessageId(null), 600)
+        prevMessagesLenRef.current = len
         return () => clearTimeout(timer)
       }
     }
-    prevMessagesLenRef.current = chat.messages.length
-  }, [chat.messages.length, chat.messages, sendingText])
+    prevMessagesLenRef.current = len
+  }, [chat.messages, sendingText])
 
   const handleSend = useCallback(
     (message: string) => {
