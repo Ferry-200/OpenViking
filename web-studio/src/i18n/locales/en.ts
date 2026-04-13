@@ -118,11 +118,31 @@ const en = {
       memoryTotal: 'Memory Total',
       tokenUsage: 'Token Usage',
       vectorCount: 'Vector Count',
+      vectorCountSub: 'indexed embeddings',
+      memoryTotalSub: 'across all categories',
+      tokenUsageSub: 'lifetime total',
     },
     systemHealth: {
       allOperational: 'All systems operational',
+      close: 'Close',
+      dialogDescription: 'Detailed error information for the selected component.',
+      dialogTitle: 'Error Details',
       issuesDetected: 'Issues detected',
+      noDetails: 'No detailed error message was returned.',
       title: 'System Health',
+      viewErrorAria: 'View error details for {{component}}',
+      viewDetails: 'View Details',
+      nIssues: '{{count}} issue(s) detected',
+      copyError: 'Copy Error',
+      copied: 'Copied',
+      statusDetail: 'Status Detail',
+      rawJson: 'Raw JSON',
+      operational: 'operational',
+      degraded: 'degraded',
+      error: 'error',
+      healthy: 'Healthy',
+      unhealthy: 'Unhealthy',
+      errors: 'errors',
     },
   },
   operations: {
@@ -199,6 +219,63 @@ const en = {
   resources: {
     page: {
       placeholder: 'Resources workspace is under construction.',
+    },
+    searchPalette: {
+      placeholder: 'Search... Enter / to browse directories',
+      scope: {
+        global: 'Search scope: Global',
+        current: 'Search scope: {{name}}',
+      },
+      scopeState: {
+        validatingTitle: 'Validating search scope',
+        validatingPrefix: 'Checking whether',
+        validatingSuffix: 'exists',
+        switchTitle: 'Switch search scope',
+        switchPrefix: 'Press',
+        switchMiddle: 'to switch to',
+        invalidTitle: 'Search scope not found',
+        invalidPrefix: 'Path',
+        invalidSuffix: 'is inaccessible and cannot be switched to',
+      },
+      empty: {
+        title: 'Semantic knowledge search',
+      },
+      browseDirHint: {
+        before: 'Enter',
+        after: 'to browse directories',
+      },
+      globalScopeHint: {
+        before: 'Enter',
+        after: 'to switch search scope to global',
+      },
+      error: 'Search failed',
+      emptyResults: {
+        title: 'No matching content found',
+        subtitle: 'Try another keyword?',
+      },
+      footer: {
+        dirMode: {
+          select: 'Select',
+          level: 'Level',
+          confirm: 'Confirm',
+          cancel: 'Cancel',
+        },
+        resultMode: {
+          navigate: 'Navigate',
+          open: 'Open',
+          close: 'Close',
+          count: '{{count}} results',
+        },
+      },
+    },
+    dirBrowser: {
+      back: 'Back',
+      loading: 'Loading directory',
+      filesSection: 'Files',
+      empty: {
+        title: 'Empty directory',
+        subtitle: 'There are currently no subdirectories to expand at this level',
+      },
     },
   },
   sessions: {

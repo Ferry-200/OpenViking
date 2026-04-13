@@ -118,11 +118,31 @@ const zhCN = {
       memoryTotal: '记忆总数',
       tokenUsage: 'Token 用量',
       vectorCount: '向量数量',
+      vectorCountSub: '已索引向量',
+      memoryTotalSub: '跨全部分类',
+      tokenUsageSub: '累计使用',
     },
     systemHealth: {
       allOperational: '所有系统正常运行',
+      close: '关闭',
+      dialogDescription: '查看当前组件的详细错误信息。',
+      dialogTitle: '错误详情',
       issuesDetected: '检测到异常',
+      noDetails: '当前没有返回更详细的错误信息。',
       title: '系统健康',
+      viewErrorAria: '查看 {{component}} 的错误详情',
+      viewDetails: '查看详情',
+      nIssues: '检测到 {{count}} 个异常',
+      copyError: '复制错误',
+      copied: '已复制',
+      statusDetail: '状态详情',
+      rawJson: 'Raw JSON',
+      operational: '正常',
+      degraded: '降级',
+      error: '异常',
+      healthy: '健康',
+      unhealthy: '异常',
+      errors: '错误列表',
     },
   },
   operations: {
@@ -199,6 +219,63 @@ const zhCN = {
   resources: {
     page: {
       placeholder: '资源工作区能力尚未接入。',
+    },
+    searchPalette: {
+      placeholder: '搜索... 输入 / 浏览目录',
+      scope: {
+        global: '搜索范围: 全局',
+        current: '搜索范围: {{name}}',
+      },
+      scopeState: {
+        validatingTitle: '正在校验搜索范围',
+        validatingPrefix: '正在检查',
+        validatingSuffix: '是否存在',
+        switchTitle: '切换搜索范围',
+        switchPrefix: '按',
+        switchMiddle: '切换到',
+        invalidTitle: '搜索范围不存在',
+        invalidPrefix: '路径',
+        invalidSuffix: '无法访问，不能切换',
+      },
+      empty: {
+        title: '语义搜索知识库',
+      },
+      browseDirHint: {
+        before: '输入',
+        after: '浏览目录结构',
+      },
+      globalScopeHint: {
+        before: '输入',
+        after: '切换搜索范围到全局',
+      },
+      error: '搜索出错',
+      emptyResults: {
+        title: '没有找到匹配的内容',
+        subtitle: '试试换个关键词？',
+      },
+      footer: {
+        dirMode: {
+          select: '选择',
+          level: '层级',
+          confirm: '确定',
+          cancel: '取消',
+        },
+        resultMode: {
+          navigate: '导航',
+          open: '打开',
+          close: '关闭',
+          count: '{{count}} 个结果',
+        },
+      },
+    },
+    dirBrowser: {
+      back: '返回上一级',
+      loading: '正在加载目录',
+      filesSection: '文件',
+      empty: {
+        title: '空目录',
+        subtitle: '这一层目前没有可继续展开的子目录',
+      },
     },
   },
   sessions: {

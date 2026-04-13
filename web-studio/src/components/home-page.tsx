@@ -1,9 +1,19 @@
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Cell, Label, Pie, PieChart } from 'recharts'
 import gsap from 'gsap'
+import { Brain, Coins, ChevronDown, Copy, Check, Database, ListTodo, Users } from 'lucide-react'
 
+import { Button } from '#/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '#/components/ui/dialog'
 import { Skeleton } from '#/components/ui/skeleton'
 import { useAppConnection } from '#/hooks/use-app-connection'
 import {
@@ -54,32 +64,36 @@ function asString(v: unknown): string {
   return typeof v === 'string' ? v : ''
 }
 
+function asStringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : []
+}
+
 function truncate(s: string, len: number): string {
   return s.length > len ? `${s.slice(0, len)}...` : s
 }
 
-// ---------- category colors (monochrome shades) ----------
+// ---------- category colors ----------
 
 const CATEGORY_COLORS: Record<string, string> = {
-  profile: '#18181b',
-  preferences: '#3f3f46',
-  entities: '#52525b',
-  events: '#71717a',
-  cases: '#a1a1aa',
-  patterns: '#d4d4d8',
-  tools: '#e4e4e7',
-  skills: '#f4f4f5',
+  profile: '#4a7c9b',
+  preferences: '#6b8cce',
+  entities: '#7e9e7e',
+  events: '#c4a882',
+  cases: '#b07e7e',
+  patterns: '#9b8bb5',
+  tools: '#8b9dad',
+  skills: '#a8917a',
 }
 
 const CATEGORY_COLORS_DARK: Record<string, string> = {
-  profile: '#fafafa',
-  preferences: '#d4d4d8',
-  entities: '#a1a1aa',
-  events: '#71717a',
-  cases: '#52525b',
-  patterns: '#3f3f46',
-  tools: '#27272a',
-  skills: '#18181b',
+  profile: '#6ba0c2',
+  preferences: '#8eaadc',
+  entities: '#a4c4a4',
+  events: '#dcc4a0',
+  cases: '#d0a0a0',
+  patterns: '#b8a8d0',
+  tools: '#a8bcc8',
+  skills: '#c4ad96',
 }
 
 const CATEGORY_ORDER = ['profile', 'preferences', 'entities', 'events', 'cases', 'patterns', 'tools', 'skills']
@@ -115,7 +129,7 @@ function Panel({
   className?: string
 }) {
   return (
-    <div className={`rounded-2xl bg-muted/50 p-6 transition-colors duration-200 hover:bg-muted/70 dark:bg-white/[0.08] dark:hover:bg-white/[0.12] ${className}`}>
+    <div className={`rounded-2xl bg-muted/80 p-6 transition-all duration-200 hover:-translate-y-0.5 hover:bg-muted hover:shadow-md dark:bg-white/[0.12] dark:hover:bg-white/[0.16] ${className}`}>
       {children}
     </div>
   )
@@ -177,26 +191,70 @@ function BreathingDot({ color, size = 'size-2.5' }: { color: string; size?: stri
 
 function StatCard({
   title,
+  subtitle,
   value,
   isLoading,
   isError,
   errorText,
+  accentColor,
+  icon: Icon,
 }: {
   title: string
+  subtitle?: string
   value?: string | number
   isLoading: boolean
   isError: boolean
   errorText: string
+  accentColor: string
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 }) {
+  const valueRef = useRef<HTMLSpanElement>(null)
+  const hasAnimated = useRef(false)
+
+  useEffect(() => {
+    if (isLoading || isError || hasAnimated.current) return
+    const el = valueRef.current
+    if (!el) return
+    const target = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''))
+    if (Number.isNaN(target)) return
+    hasAnimated.current = true
+    const obj = { val: 0 }
+    gsap.to(obj, {
+      val: target,
+      duration: 0.8,
+      ease: 'power2.out',
+      onUpdate: () => {
+        el.textContent = Math.round(obj.val).toLocaleString()
+      },
+    })
+  }, [isLoading, isError, value])
+
   return (
-    <div className="flex flex-col justify-between gap-4 rounded-2xl bg-muted/50 p-6 transition-colors duration-200 hover:bg-muted/70 dark:bg-white/[0.08] dark:hover:bg-white/[0.12]">
-      <span className="text-sm tracking-wide text-muted-foreground">{title}</span>
+    <div
+      className="relative flex flex-col justify-between gap-4 overflow-hidden rounded-2xl bg-muted/80 p-6 transition-all duration-200 hover:-translate-y-0.5 hover:bg-muted hover:shadow-md dark:bg-white/[0.12] dark:hover:bg-white/[0.16]"
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-sm tracking-wide text-muted-foreground">{title}</span>
+        <span
+          className="flex size-8 items-center justify-center rounded-full"
+          style={{ backgroundColor: `${accentColor}20` }}
+        >
+          <Icon className="size-4" style={{ color: accentColor }} />
+        </span>
+      </div>
       {isLoading ? (
         <Skeleton className="h-12 w-28" />
       ) : isError ? (
         <span className="text-sm text-destructive">{errorText}</span>
       ) : (
-        <span className="text-5xl font-bold tracking-tighter tabular-nums">{value}</span>
+        <div>
+          <span ref={valueRef} className="text-5xl font-bold tracking-tighter tabular-nums">
+            0
+          </span>
+          {subtitle && (
+            <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+          )}
+        </div>
       )}
     </div>
   )
@@ -217,68 +275,308 @@ function ComponentHealthBar({
   sysLoading: boolean
   isError: boolean
   error: Error | null
-  t: (key: string) => string
+  t: (key: string, options?: Record<string, unknown>) => string
 }) {
+  const [selectedComponent, setSelectedComponent] = useState<{
+    name: string
+    payload: Record<string, unknown>
+  } | null>(null)
+  const [showDialogScrollbar, setShowDialogScrollbar] = useState(false)
+  const [statusExpanded, setStatusExpanded] = useState(true)
+  const [jsonExpanded, setJsonExpanded] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const dialogScrollRef = useRef<HTMLDivElement | null>(null)
+  const hideScrollbarTimerRef = useRef<number | null>(null)
   const record = asRecord(data)
   const sys = asRecord(sysData)
-  const components = asRecord(record.components)
+  const components = { ...asRecord(record.components) }
   const names = ['queue', 'vikingdb', 'models', 'lock', 'retrieval']
   const systemHealthy = sys.initialized === true
-  const overallHealthy = record.is_healthy === true
+
+  const hasComponentIssues = names.some((name) => {
+    const comp = asRecord(components[name])
+    return comp.has_errors === true || comp.is_healthy !== true
+  })
+  const overallHealthy = record.is_healthy === true && !hasComponentIssues
+  const displaySystemHealthy = systemHealthy && !hasComponentIssues
+
+  const openComponentDetails = (name: string, component: Record<string, unknown>) => {
+    setSelectedComponent({
+      name,
+      payload: {
+        name,
+        is_healthy: component.is_healthy === true,
+        has_errors: component.has_errors === true,
+        status: asString(component.status),
+        errors: asStringArray(component.errors),
+      },
+    })
+  }
+
+  const copyErrors = async () => {
+    try {
+      const errors = asStringArray(selectedComponent?.payload.errors)
+      const status = asString(selectedComponent?.payload.status)
+      const text = [status, ...errors].filter(Boolean).join('\n\n')
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard API not available
+    }
+  }
+
+  useEffect(() => {
+    if (!selectedComponent) {
+      setShowDialogScrollbar(false)
+      if (hideScrollbarTimerRef.current !== null) {
+        window.clearTimeout(hideScrollbarTimerRef.current)
+        hideScrollbarTimerRef.current = null
+      }
+      return
+    }
+
+    const node = dialogScrollRef.current
+    if (!node) {
+      return
+    }
+
+    const handleScroll = () => {
+      setShowDialogScrollbar(true)
+      if (hideScrollbarTimerRef.current !== null) {
+        window.clearTimeout(hideScrollbarTimerRef.current)
+      }
+      hideScrollbarTimerRef.current = window.setTimeout(() => {
+        setShowDialogScrollbar(false)
+      }, 700)
+    }
+
+    node.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      node.removeEventListener('scroll', handleScroll)
+      if (hideScrollbarTimerRef.current !== null) {
+        window.clearTimeout(hideScrollbarTimerRef.current)
+        hideScrollbarTimerRef.current = null
+      }
+    }
+  }, [selectedComponent])
 
   return (
-    <Panel>
-      <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight">{t('systemHealth.title')}</h2>
-        {!isLoading && !sysLoading && !isError && (
-          <div className="flex items-center gap-2">
-            {overallHealthy && systemHealthy
-              ? <BreathingDot color="#7e9e7e" />
-              : <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: '#b07e7e' }} />
-            }
-            <span className="text-sm text-muted-foreground">{overallHealthy && systemHealthy ? t('systemHealth.allOperational') : t('systemHealth.issuesDetected')}</span>
-          </div>
-        )}
-      </div>
-      {isLoading || sysLoading ? (
-        <div className="flex gap-4">
-          {names.map((n) => <Skeleton key={n} className="h-10 w-32" />)}
-        </div>
-      ) : isError ? (
-        <div className="space-y-1">
-          <span className="text-sm text-destructive">{t('requestFailed')}</span>
-          {error?.message && (
-            <pre className="max-h-24 overflow-auto rounded-lg bg-foreground/[0.03] p-3 text-xs text-muted-foreground">{error.message}</pre>
+    <>
+      <Panel>
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight">{t('systemHealth.title')}</h2>
+          {!isLoading && !sysLoading && !isError && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+              style={
+                overallHealthy && displaySystemHealthy
+                  ? { backgroundColor: 'rgba(126,158,126,0.15)', color: '#7e9e7e' }
+                  : { backgroundColor: 'rgba(176,126,126,0.15)', color: '#b07e7e' }
+              }
+            >
+              {overallHealthy && displaySystemHealthy
+                ? (
+                  <>
+                    <span className="inline-block size-2 rounded-full" style={{ backgroundColor: '#7e9e7e' }} />
+                    {t('systemHealth.allOperational')}
+                  </>
+                )
+                : (
+                  <>
+                    <BreathingDot color="#b07e7e" size="size-2" />
+                    {t('systemHealth.nIssues', {
+                      count: names.filter((n) => {
+                        const c = asRecord(components[n])
+                        return c.has_errors === true || c.is_healthy !== true
+                      }).length,
+                    })}
+                  </>
+                )
+              }
+            </span>
           )}
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <div className="flex items-center gap-2.5 rounded-xl bg-foreground/[0.03] px-4 py-3 dark:bg-foreground/[0.06]">
-            {systemHealthy
-              ? <BreathingDot color="#7e9e7e" />
-              : <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: '#b07e7e' }} />
-            }
-            <span className="text-sm font-medium">System</span>
+        {isLoading || sysLoading ? (
+          <div className="space-y-3">
+            {names.map((n) => <Skeleton key={n} className="h-12 w-full" />)}
           </div>
-          {names.map((name) => {
-            const comp = asRecord(components[name])
-            const healthy = comp.is_healthy === true
-            return (
-              <div
-                key={name}
-                className="flex items-center gap-2.5 rounded-xl bg-foreground/[0.03] px-4 py-3 dark:bg-foreground/[0.06]"
-              >
-                {healthy
-                  ? <BreathingDot color="#7e9e7e" />
-                  : <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: '#b07e7e' }} />
-                }
-                <span className="text-sm font-medium capitalize">{name}</span>
+        ) : isError ? (
+          <div className="space-y-1">
+            <span className="text-sm text-destructive">{t('requestFailed')}</span>
+            {error?.message && (
+              <pre className="max-h-24 overflow-auto rounded-lg bg-foreground/[0.03] p-3 text-xs text-muted-foreground">{error.message}</pre>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-foreground/5">
+            {/* Component rows */}
+            {names.map((name) => {
+              const comp = asRecord(components[name])
+              const healthy = comp.is_healthy === true
+              const hasIssues = comp.has_errors === true || !healthy
+              return (
+                <div
+                  key={name}
+                  className={`flex items-center justify-between px-3 py-3 ${hasIssues ? 'rounded-lg bg-destructive/5' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {healthy
+                      ? <span className="inline-block size-2.5 rounded-full" style={{ backgroundColor: '#7e9e7e' }} />
+                      : <BreathingDot color="#b07e7e" />
+                    }
+                    <span className="text-sm font-medium capitalize">{name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground">
+                      {healthy ? t('systemHealth.operational') : t('systemHealth.error')}
+                    </span>
+                    {hasIssues && (
+                      <button
+                        type="button"
+                        aria-label={`${t('systemHealth.viewErrorAria')} ${name}`}
+                        className="text-xs font-medium text-[#b07e7e] transition hover:text-[#9d6767]"
+                        onClick={() => openComponentDetails(name, comp)}
+                      >
+                        {t('systemHealth.viewDetails')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Panel>
+
+      <Dialog open={selectedComponent !== null} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedComponent(null)
+          setStatusExpanded(true)
+          setJsonExpanded(false)
+          setCopied(false)
+        }
+      }}>
+        <DialogContent className="max-h-[min(88vh,720px)] max-w-lg gap-0 overflow-hidden p-0">
+
+
+          <DialogHeader>
+            <div className="border-b border-border/60 px-6 pt-5 pb-4">
+              <DialogTitle>
+                {selectedComponent ? `${selectedComponent.name} ${t('systemHealth.dialogTitle')}` : t('systemHealth.dialogTitle')}
+              </DialogTitle>
+              <DialogDescription className="mt-1">
+                {t('systemHealth.dialogDescription')}
+              </DialogDescription>
+              {/* Status summary row */}
+              {selectedComponent && (
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm font-medium capitalize">{asString(selectedComponent.payload.name)}</span>
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style={
+                      selectedComponent.payload.is_healthy
+                        ? { backgroundColor: 'rgba(126,158,126,0.15)', color: '#7e9e7e' }
+                        : { backgroundColor: 'rgba(176,126,126,0.15)', color: '#b07e7e' }
+                    }
+                  >
+                    {selectedComponent.payload.is_healthy ? t('systemHealth.healthy') : t('systemHealth.unhealthy')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div
+            ref={dialogScrollRef}
+            className={[
+              'overflow-y-auto px-6 py-5',
+              'max-h-[calc(min(88vh,720px)-200px)]',
+              '[scrollbar-width:none]',
+              '[&::-webkit-scrollbar]:w-0',
+              showDialogScrollbar
+                ? '[scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/80 [&::-webkit-scrollbar-track]:bg-transparent'
+                : '',
+            ].join(' ')}
+          >
+            <div className="space-y-4">
+              {/* Errors section */}
+              {asStringArray(selectedComponent?.payload.errors).length > 0 && (
+                <div>
+                  <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('systemHealth.errors')}</div>
+                  <div className="space-y-2">
+                    {asStringArray(selectedComponent?.payload.errors).map((item, index) => (
+                      <div
+                        key={`${selectedComponent?.name}-error-${index}`}
+                        className="rounded-lg bg-destructive/5 px-4 py-2.5 text-sm leading-6 dark:bg-destructive/10"
+                      >
+                        <span className="whitespace-pre-wrap break-words">{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Status detail — collapsible */}
+              <div>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                  onClick={() => setStatusExpanded((v) => !v)}
+                >
+                  {t('systemHealth.statusDetail')}
+                  <ChevronDown className={`size-4 transition-transform duration-200 ${statusExpanded ? '' : '-rotate-90'}`} />
+                </button>
+                {statusExpanded && (
+                  <div className="mt-2 rounded-xl bg-muted/60 p-4 text-sm leading-6 text-muted-foreground dark:bg-white/[0.06]">
+                    <div className="whitespace-pre-wrap break-words">
+                      {asString(selectedComponent?.payload.status) || t('systemHealth.noDetails')}
+                    </div>
+                  </div>
+                )}
               </div>
-            )
-          })}
-        </div>
-      )}
-    </Panel>
+
+              {/* Raw JSON — collapsed by default */}
+              <div>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between text-xs font-medium uppercase tracking-wide text-muted-foreground"
+                  onClick={() => setJsonExpanded((v) => !v)}
+                >
+                  {t('systemHealth.rawJson')}
+                  <ChevronDown className={`size-4 transition-transform duration-200 ${jsonExpanded ? '' : '-rotate-90'}`} />
+                </button>
+                {jsonExpanded && (
+                  <div className="mt-2 rounded-xl border border-border/40 bg-muted/60 p-4 dark:bg-white/[0.06]">
+                    <pre className="overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                      {JSON.stringify(selectedComponent?.payload ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border/60 px-6 py-4">
+            <div className="flex w-full items-center justify-between">
+              <div>
+                {asStringArray(selectedComponent?.payload.errors).length > 0 && (
+                  <Button variant="outline" size="sm" onClick={copyErrors}>
+                    {copied
+                      ? <><Check className="mr-1.5 size-3.5" />{t('systemHealth.copied')}</>
+                      : <><Copy className="mr-1.5 size-3.5" />{t('systemHealth.copyError')}</>
+                    }
+                  </Button>
+                )}
+              </div>
+              <Button variant="outline" onClick={() => setSelectedComponent(null)}>
+                {t('systemHealth.close')}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -345,7 +643,7 @@ function MemoryStatsCard({
               return (
                 <div key={cat} className="flex items-center gap-3 text-sm">
                   <span
-                    className="inline-block size-3 shrink-0 rounded-full"
+                    className="inline-block size-3 shrink-0 rounded-sm"
                     style={{ backgroundColor: colors[cat] }}
                   />
                   <span className="font-medium">{t(`memoryStats.category.${cat}`)}</span>
@@ -382,7 +680,10 @@ function RecentTasksCard({
       ) : isError ? (
         <span className="text-sm text-destructive">{t('requestFailed')}</span>
       ) : tasks.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('recentTasks.empty')}</p>
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
+          <ListTodo className="size-8 opacity-40" />
+          <p className="text-sm">{t('recentTasks.empty')}</p>
+        </div>
       ) : (
         <Table>
           <TableHeader>
@@ -396,7 +697,7 @@ function RecentTasksCard({
             {tasks.map((t, i) => {
               const task = asRecord(t)
               return (
-                <TableRow key={asString(task.task_id) || i} className="border-foreground/5 hover:bg-foreground/[0.02]">
+                <TableRow key={asString(task.task_id) || i} className="border-foreground/5 transition-colors hover:bg-muted/40">
                   <TableCell className="font-mono text-sm">{truncate(asString(task.task_id), 12)}</TableCell>
                   <TableCell className="text-sm">{asString(task.task_type)}</TableCell>
                   <TableCell><TaskStatusDot status={asString(task.status)} /></TableCell>
@@ -440,7 +741,10 @@ function SessionsCard({
       ) : isError ? (
         <span className="text-sm text-destructive">{t('requestFailed')}</span>
       ) : sessions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('sessions.empty')}</p>
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground">
+          <Users className="size-8 opacity-40" />
+          <p className="text-sm">{t('sessions.empty')}</p>
+        </div>
       ) : (
         <Table>
           <TableHeader>
@@ -454,8 +758,8 @@ function SessionsCard({
             {sessions.map((s, i) => {
               const session = asRecord(s)
               return (
-                <TableRow key={asString(session.session_id) || i} className="border-foreground/5 hover:bg-foreground/[0.02]">
-                  <TableCell className="font-mono text-sm">{truncate(asString(session.session_id), 24)}</TableCell>
+                <TableRow key={asString(session.session_id) || i} className="border-foreground/5 transition-colors hover:bg-muted/40">
+                  <TableCell className="font-mono text-sm" title={asString(session.session_id)}>{truncate(asString(session.session_id), 8)}</TableCell>
                   <TableCell>
                     {(() => {
                       const status = asString(session.status) || 'active'
@@ -558,24 +862,33 @@ export function HomePage() {
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           title={t('statCard.vectorCount')}
-          value={asNumber(vecRecord.count).toLocaleString()}
+          subtitle={t('statCard.vectorCountSub')}
+          value={asNumber(vecRecord.count)}
           isLoading={vectorCount.isLoading}
           isError={vectorCount.isError}
           errorText={t('requestFailed')}
+          accentColor="#6b8cce"
+          icon={Database}
         />
         <StatCard
           title={t('statCard.memoryTotal')}
-          value={asNumber(memRecord.total_memories).toLocaleString()}
+          subtitle={t('statCard.memoryTotalSub')}
+          value={asNumber(memRecord.total_memories)}
           isLoading={memoryStats.isLoading}
           isError={memoryStats.isError}
           errorText={t('requestFailed')}
+          accentColor="#7e9e7e"
+          icon={Brain}
         />
         <StatCard
           title={t('statCard.tokenUsage')}
-          value={asNumber(tokenRecord.total_tokens).toLocaleString()}
+          subtitle={t('statCard.tokenUsageSub')}
+          value={asNumber(tokenRecord.total_tokens)}
           isLoading={tokenStats.isLoading}
           isError={tokenStats.isError}
           errorText={t('requestFailed')}
+          accentColor="#c4a882"
+          icon={Coins}
         />
       </div>
 
