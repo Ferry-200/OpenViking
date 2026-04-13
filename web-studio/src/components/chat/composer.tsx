@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { motion } from 'motion/react'
 import { ArrowUpIcon, FileIcon, PaperclipIcon, SquareIcon, XIcon } from 'lucide-react'
 
 import { cn } from '#/lib/utils'
@@ -11,6 +12,8 @@ interface ComposerProps {
   attachment?: FileAttachment
   onAttach?: (file: File) => void
   onClearAttachment?: () => void
+  /** Text currently animating from composer to message bubble */
+  sendingText?: string | null
 }
 
 export function Composer({
@@ -20,6 +23,7 @@ export function Composer({
   attachment,
   onAttach,
   onClearAttachment,
+  sendingText,
 }: ComposerProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -60,11 +64,23 @@ export function Composer({
     <div className="px-4 pb-4 pt-2">
       <div
         className={cn(
-          'mx-auto w-full max-w-3xl rounded-2xl border border-border/50 bg-background/95 transition-shadow duration-200',
+          'relative mx-auto w-full max-w-3xl rounded-2xl border border-border/50 bg-background/95 transition-shadow duration-200',
           'shadow-lg shadow-black/8 dark:shadow-black/25',
           'has-[:focus]:shadow-xl has-[:focus]:shadow-primary/5 has-[:focus]:border-primary/30',
         )}
       >
+        {/* Sending phantom — visible briefly while layoutId animates to message bubble */}
+        {sendingText && (
+          <motion.div
+            layoutId="sending-bubble"
+            className="absolute inset-x-4 top-3 rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground whitespace-pre-wrap shadow-sm"
+            transition={{ type: 'spring', stiffness: 350, damping: 28, mass: 0.8 }}
+            style={{ zIndex: 50 }}
+          >
+            {sendingText}
+          </motion.div>
+        )}
+
         {/* Attachment preview */}
         {hasAttachment && attachment && (
           <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2 text-xs">
@@ -118,6 +134,7 @@ export function Composer({
             'min-h-[44px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-sm',
             'placeholder:text-muted-foreground/60',
             'focus-visible:outline-none',
+            sendingText && 'opacity-0', // hide textarea while phantom is visible
           )}
         />
         <div className="flex items-center justify-between px-3 pb-2.5">
