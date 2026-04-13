@@ -164,8 +164,15 @@ async def chat_stream(
             detail="Invalid JSON in request body",
         )
 
-    async def event_stream() -> AsyncGenerator[str, None]:
-        """Generate SSE events from bot response stream."""
+    async def event_stream() -> AsyncGenerator[bytes, None]:
+        """Proxy SSE stream from bot service, preserving event framing.
+
+        aiter_lines() does line-level + response-body buffering which batches
+        small SSE delta events (each ~40 bytes) into bursts. aiter_bytes()
+        yields chunks as soon as they arrive from the upstream, preserving
+        the original ``\\n\\n`` event boundaries and real-time first-byte
+        latency.
+        """
         try:
             async with httpx.AsyncClient() as client:
                 # Build headers - only include X-API-Key if provided
@@ -183,25 +190,24 @@ async def chat_stream(
                 ) as response:
                     response.raise_for_status()
 
-                    # Stream the response content
-                    async for line in response.aiter_lines():
-                        if line:
-                            # Forward the SSE line as-is
-                            yield f"{line}\n"
+                    # Pass raw bytes through to preserve SSE event boundaries.
+                    async for chunk in response.aiter_bytes():
+                        if chunk:
+                            yield chunk
         except httpx.RequestError as e:
             logger.error(f"Failed to connect to bot service: {e}")
             error_event = {
                 "event": "error",
                 "data": json.dumps({"error": f"Bot service unavailable: {str(e)}"}),
             }
-            yield f"data: {json.dumps(error_event)}\n\n"
+            yield f"data: {json.dumps(error_event)}\n\n".encode()
         except httpx.HTTPStatusError as e:
             logger.error(f"Bot service returned error: {e}")
             error_event = {
                 "event": "error",
                 "data": json.dumps({"error": f"Bot service error: {e.response.text}"}),
             }
-            yield f"data: {json.dumps(error_event)}\n\n"
+            yield f"data: {json.dumps(error_event)}\n\n".encode()
 
     return StreamingResponse(
         event_stream(),
