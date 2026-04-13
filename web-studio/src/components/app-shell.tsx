@@ -169,6 +169,7 @@ function NavGroupItem({ item, pathname, title, t }: NavGroupItemProps) {
                   <SidebarMenuSubButton
                     render={<Link to={child.to} />}
                     isActive={childActive}
+                    className='text-base'
                   >
                     <ChildIcon />
                     <span>{childTitle}</span>
