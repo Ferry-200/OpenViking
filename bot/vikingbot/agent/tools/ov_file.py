@@ -137,29 +137,45 @@ class VikingAddResourceTool(OVFileTool):
 
     @property
     def description(self) -> str:
-        return "Add a resource (url like pic, git code or local file path) to OpenViking.This is a asynchronous operation."
+        return (
+            "Add a resource to OpenViking. This is an asynchronous operation.\n"
+            "Use 'temp_file_id' for files uploaded by the user (values starting with 'upload_').\n"
+            "Use 'path' for URLs or local file paths."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Url or local file path"},
+                "path": {"type": "string", "description": "Url or local file path (do NOT put temp_file_id here)"},
+                "temp_file_id": {"type": "string", "description": "Temporary file ID from user upload, starts with 'upload_'. Pass it here, NOT in path."},
                 "description": {"type": "string", "description": "Description of the resource"},
+                "parent": {"type": "string", "description": "Parent Viking URI to place the resource under (optional)"},
             },
-            "required": ["path", "description"],
+            "required": ["description"],
         }
 
     async def execute(
         self,
         tool_context: "ToolContext",
-        path: str,
         description: str,
+        path: str = "",
+        temp_file_id: str = "",
+        parent: str = "",
         **kwargs: Any,
     ) -> str:
         client = None
         try:
-            if path and not path.startswith("http"):
+            # Auto-correct: if path looks like a temp_file_id, move it
+            if path and path.startswith("upload_") and not temp_file_id:
+                temp_file_id = path
+                path = ""
+
+            if not path and not temp_file_id:
+                return "Error: Either 'path' or 'temp_file_id' must be provided."
+
+            if path and not temp_file_id and not path.startswith("http"):
                 local_path = Path(path).expanduser().resolve()
                 if not local_path.exists():
                     return f"Error: File not found: {path}"
@@ -167,7 +183,12 @@ class VikingAddResourceTool(OVFileTool):
                     return f"Error: Not a file: {path}"
 
             client = await VikingClient.create(tool_context.workspace_id)
-            result = await client.add_resource(path, description)
+            result = await client.add_resource(
+                local_path=path or None,
+                desc=description,
+                temp_file_id=temp_file_id or None,
+                parent=parent or None,
+            )
 
             if result:
                 root_uri = result.get("root_uri", "")
