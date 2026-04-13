@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Cell, Label, Pie, PieChart } from 'recharts'
 
 import { Skeleton } from '#/components/ui/skeleton'
+import { useAppConnection } from '#/hooks/use-app-connection'
 import {
   Table,
   TableBody,
@@ -27,7 +28,7 @@ import { getOvResult } from '#/lib/ov-client'
 async function fetchTokenStats(): Promise<unknown> {
   try {
     const response = await client.get({ url: '/api/v1/stats/tokens', responseType: 'json' })
-    return (response.data as Record<string, unknown>)?.result ?? null
+    return (response.data as Record<string, unknown>).result ?? null
   } catch {
     return null
   }
@@ -453,13 +454,13 @@ function SessionsCard({
                   <TableCell>
                     {(() => {
                       const status = asString(session.status) || 'active'
-                      const style = SESSION_STATUS_STYLES[status] ?? SESSION_STATUS_STYLES.active!
+                      const style = SESSION_STATUS_STYLES[status] ?? SESSION_STATUS_STYLES.active
                       return (
                         <span
                           className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
                           style={{
-                            backgroundColor: isDark ? style!.darkBg : style!.bg,
-                            color: isDark ? style!.darkText : style!.text,
+                            backgroundColor: isDark ? style.darkBg : style.bg,
+                            color: isDark ? style.darkText : style.text,
                           }}
                         >
                           {status}
@@ -481,37 +482,46 @@ function SessionsCard({
 // ---------- main ----------
 
 export function HomePage() {
+  const { isConnectionReady } = useAppConnection()
+
   const systemStatus = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['system-status'],
     queryFn: () => getOvResult(getSystemStatus()),
   })
 
   const observerSystem = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['observer-system'],
     queryFn: () => getOvResult(getObserverSystem()),
   })
 
   const memoryStats = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['stats-memories'],
     queryFn: () => getOvResult(getStatsMemories()),
   })
 
   const vectorCount = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['debug-vector-count'],
     queryFn: () => getOvResult(getDebugVectorCount()),
   })
 
   const tasks = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['tasks'],
     queryFn: () => getOvResult(getTasks()),
   })
 
   const sessions = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['sessions'],
     queryFn: () => getOvResult(getSessions()),
   })
 
   const tokenStats = useQuery({
+    enabled: isConnectionReady,
     queryKey: ['stats-tokens'],
     queryFn: () => fetchTokenStats(),
   })

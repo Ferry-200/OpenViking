@@ -97,15 +97,18 @@ export function AddResourcePage() {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0]
-      if (file) {
-        if (isBlockedFile(file.name)) {
-          toast.error(t('fileBlocked', { name: file.name }))
-          return
-        }
-        setSelectedFile(file)
-        detectFileType(file)
+      if (acceptedFiles.length === 0) {
+        return
       }
+
+      const file = acceptedFiles[0]
+      if (isBlockedFile(file.name)) {
+        toast.error(t('fileBlocked', { name: file.name }))
+        return
+      }
+
+      setSelectedFile(file)
+      detectFileType(file)
     },
     [detectFileType, t],
   )

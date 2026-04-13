@@ -21,6 +21,7 @@ export type ConnectionIdentitySummary = {
 
 type AppConnectionContextValue = {
   connection: ConnectionDraft
+  isConnectionReady: boolean
   isConnectionDialogOpen: boolean
   openConnectionDialog: () => void
   saveConnection: (next: ConnectionDraft) => void
@@ -109,6 +110,7 @@ export function AppConnectionProvider({ children }: { children: React.ReactNode 
     ...storedConnection,
     apiKey: ovClient.getConnection().apiKey || storedConnection.apiKey || DEFAULT_CONNECTION.apiKey,
   })
+  const [isConnectionReady, setConnectionReady] = React.useState(false)
   const [isConnectionDialogOpen, setConnectionDialogOpen] = React.useState(false)
   const [serverMode, setServerMode] = React.useState<ServerMode>('checking')
 
@@ -122,6 +124,7 @@ export function AppConnectionProvider({ children }: { children: React.ReactNode 
       userId: connection.userId,
     })
     persistConnection(connection)
+    setConnectionReady(true)
   }, [connection])
 
   React.useEffect(() => {
@@ -157,6 +160,7 @@ export function AppConnectionProvider({ children }: { children: React.ReactNode 
 
   const value = React.useMemo<AppConnectionContextValue>(() => ({
     connection,
+    isConnectionReady,
     isConnectionDialogOpen,
     openConnectionDialog: () => setConnectionDialogOpen(true),
     saveConnection: (next) => setConnection({
@@ -167,7 +171,7 @@ export function AppConnectionProvider({ children }: { children: React.ReactNode 
     }),
     serverMode,
     setConnectionDialogOpen,
-  }), [connection, isConnectionDialogOpen, serverMode])
+  }), [connection, isConnectionReady, isConnectionDialogOpen, serverMode])
 
   return (
     <AppConnectionContext.Provider value={value}>

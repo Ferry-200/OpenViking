@@ -5,8 +5,23 @@ export type ServerModeBadge = {
   variant: 'default' | 'secondary' | 'outline' | 'destructive'
 }
 
+function fixCommonHostTypos(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl)
+    if (url.hostname.endsWith('.ap')) {
+      url.hostname = `${url.hostname}p`
+      return url.toString().replace(/\/+$/, '')
+    }
+  } catch {
+    // Ignore invalid URLs and fall back to the normalized raw value.
+  }
+
+  return baseUrl
+}
+
 export function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '')
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  return fixCommonHostTypos(normalized)
 }
 
 export async function detectServerMode(baseUrl: string): Promise<ServerMode> {

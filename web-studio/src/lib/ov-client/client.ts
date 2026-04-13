@@ -24,9 +24,24 @@ const ENV_BASE_URL = typeof import.meta.env.VITE_OV_BASE_URL === 'string'
   ? import.meta.env.VITE_OV_BASE_URL.trim()
   : ''
 
+function fixCommonHostTypos(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl)
+    if (url.hostname.endsWith('.ap')) {
+      url.hostname = `${url.hostname}p`
+      return url.toString().replace(/\/+$/, '')
+    }
+  } catch {
+    // Ignore invalid URLs and fall back to the normalized raw value.
+  }
+
+  return baseUrl
+}
+
 function normalizeBaseUrl(baseUrl?: string): string {
   const fallback = isBrowser() ? window.location.origin : ''
-  return (baseUrl || ENV_BASE_URL || fallback).trim().replace(/\/+$/, '')
+  const normalized = (baseUrl || ENV_BASE_URL || fallback).trim().replace(/\/+$/, '')
+  return fixCommonHostTypos(normalized)
 }
 
 function readSessionStorage(key: string): string {
