@@ -150,8 +150,6 @@ function isImageFile(name: string): boolean {
 interface MessageListProps {
   messages: Message[]
   attachmentPreviews?: Map<string, string>
-  /** ID of the message currently animating from composer (gets layoutId) */
-  sendingMessageId?: string | null
   streaming?: {
     content: string
     toolCalls: StreamToolCall[]
@@ -160,15 +158,14 @@ interface MessageListProps {
   }
 }
 
-export function MessageList({ messages, attachmentPreviews, sendingMessageId, streaming }: MessageListProps) {
+export function MessageList({ messages, attachmentPreviews, streaming }: MessageListProps) {
   return (
     <>
       {messages.map((msg, idx) => {
         const prev = idx > 0 ? messages[idx - 1] : null
         const sameRole = prev?.role === msg.role
-        const isAnimatingTarget = msg.id === sendingMessageId
         return msg.role === 'user' ? (
-          <UserMessage key={msg.id} message={msg} compact={sameRole} attachmentPreviews={attachmentPreviews} isLayoutTarget={isAnimatingTarget} />
+          <UserMessage key={msg.id} message={msg} compact={sameRole} attachmentPreviews={attachmentPreviews} />
         ) : (
           <AssistantMessage key={msg.id} message={msg} compact={sameRole} />
         )
@@ -186,12 +183,10 @@ const UserMessage = memo(function UserMessage({
   message,
   compact,
   attachmentPreviews,
-  isLayoutTarget,
 }: {
   message: Message
   compact?: boolean
   attachmentPreviews?: Map<string, string>
-  isLayoutTarget?: boolean
 }) {
   const rawText = getTextFromParts(message)
   const parsed = parseAttachment(rawText)
@@ -225,13 +220,9 @@ const UserMessage = memo(function UserMessage({
           </div>
         )}
         {text && (
-          <motion.div
-            layoutId={isLayoutTarget ? 'sending-bubble' : undefined}
-            className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground whitespace-pre-wrap shadow-sm"
-            transition={{ type: 'spring', stiffness: 350, damping: 28, mass: 0.8 }}
-          >
+          <div className="rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground whitespace-pre-wrap shadow-sm">
             {text}
-          </motion.div>
+          </div>
         )}
       </div>
       {!compact ? (

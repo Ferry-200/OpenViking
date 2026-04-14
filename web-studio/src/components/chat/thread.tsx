@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { LayoutGroup } from 'motion/react'
 import { CompassIcon } from 'lucide-react'
 
 import { useChat } from '#/routes/sessions/-hooks/use-chat'
@@ -33,58 +32,21 @@ export function Thread({ sessionId }: ThreadProps) {
   const { attachment, attach, clear: clearAttachment } = useFileAttachment()
   const attachmentPreviewsRef = useRef<Map<string, string>>(new Map())
 
-  // ---- Send animation: layoutId FLIP ----
-  const [sendingText, setSendingText] = useState<string | null>(null)
-  const [sendingMessageId, setSendingMessageId] = useState<string | null>(null)
-  const pendingSendRef = useRef<string | null>(null)
-
-  // Step 2: After phantom renders, actually send the message
-  useEffect(() => {
-    if (!sendingText || !pendingSendRef.current) return
-    const text = pendingSendRef.current
-    pendingSendRef.current = null
-    // Wait one frame so phantom is painted, then send
-    const raf = requestAnimationFrame(() => {
-      chat.send(text)
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [sendingText, chat])
-
-  // Step 3: When the new user message appears in messages[], transfer layoutId
-  const prevMessagesLenRef = useRef(chat.messages.length)
-  useEffect(() => {
-    const len = chat.messages.length
-    if (len > prevMessagesLenRef.current && sendingText) {
-      const lastMsg = chat.messages[len - 1]
-      if (lastMsg?.role === 'user') {
-        setSendingText(null)
-        setSendingMessageId(lastMsg.id)
-        const timer = setTimeout(() => setSendingMessageId(null), 600)
-        prevMessagesLenRef.current = len
-        return () => clearTimeout(timer)
-      }
-    }
-    prevMessagesLenRef.current = len
-  }, [chat.messages, sendingText])
-
   const handleSend = useCallback(
     (message: string) => {
       let text = message
       if (attachment.phase === 'ready' && attachment.tempFileId) {
         const prefix = `[uploaded_file: ${attachment.fileName}, temp_file_id: ${attachment.tempFileId}]`
         text = text ? `${prefix}\n${text}` : prefix
+        // Store preview URL for this temp_file_id (survives attachment clear)
         if (attachment.previewUrl) {
           attachmentPreviewsRef.current.set(attachment.tempFileId, attachment.previewUrl)
         }
         clearAttachment()
       }
-      if (text.trim()) {
-        // Step 1: Show phantom, defer actual send
-        pendingSendRef.current = text
-        setSendingText(message.trim())
-      }
+      if (text.trim()) chat.send(text)
     },
-    [attachment, clearAttachment],
+    [attachment, clearAttachment, chat],
   )
 
   // ---- Auto-scroll ----
@@ -122,69 +84,65 @@ export function Thread({ sessionId }: ThreadProps) {
   const isEmpty = chat.messages.length === 0 && !isStreaming
 
   return (
-    <LayoutGroup>
-      <div className="relative flex h-full flex-col">
-        {/* PixelBlast background — deferred until idle */}
-        {showBackground && (
-          <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
-            <Suspense fallback={null}>
-              <PixelBlast
-                color="#008bad"
-                pixelSize={1}
-                edgeFade={0.2}
-                speed={1.55}
-                enableRipples={false}
-              />
-            </Suspense>
-          </div>
-        )}
-
-        {title && (
-          <div className="relative z-10 flex h-12 items-center border-b border-border/50 bg-background/95 px-6">
-            <h2 className="text-sm font-medium truncate text-foreground">{title}</h2>
-          </div>
-        )}
-
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-4 pt-12 pb-24"
-        >
-          {isEmpty ? (
-            <ThreadEmpty />
-          ) : (
-            <MessageList
-              messages={chat.messages}
-              attachmentPreviews={attachmentPreviewsRef.current}
-              sendingMessageId={sendingMessageId}
-              streaming={
-                isStreaming
-                  ? {
-                      content: chat.streamingContent,
-                      toolCalls: chat.streamingToolCalls,
-                      reasoning: chat.streamingReasoning,
-                      iteration: chat.iteration,
-                    }
-                  : undefined
-              }
+    <div className="relative flex h-full flex-col">
+      {/* PixelBlast background — deferred until idle */}
+      {showBackground && (
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
+          <Suspense fallback={null}>
+            <PixelBlast
+              color="#008bad"
+              pixelSize={1}
+              edgeFade={0.2}
+              speed={1.55}
+              enableRipples={false}
             />
-          )}
-          <div ref={bottomRef} />
+          </Suspense>
         </div>
+      )}
 
-        <div className="relative z-10">
-          <Composer
-            onSend={handleSend}
-            onCancel={chat.abort}
-            isStreaming={isStreaming}
-            attachment={attachment}
-            onAttach={attach}
-            onClearAttachment={clearAttachment}
-            sendingText={sendingText}
-          />
+      {title && (
+        <div className="relative z-10 flex h-12 items-center border-b border-border/50 bg-background/95 px-6">
+          <h2 className="text-sm font-medium truncate text-foreground">{title}</h2>
         </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex flex-1 flex-col items-center overflow-y-auto px-4 pt-12 pb-24"
+      >
+        {isEmpty ? (
+          <ThreadEmpty />
+        ) : (
+          <MessageList
+            messages={chat.messages}
+            attachmentPreviews={attachmentPreviewsRef.current}
+            streaming={
+              isStreaming
+                ? {
+                    content: chat.streamingContent,
+                    toolCalls: chat.streamingToolCalls,
+                    reasoning: chat.streamingReasoning,
+                    iteration: chat.iteration,
+                  }
+                : undefined
+            }
+          />
+        )}
+        <div ref={bottomRef} />
       </div>
-    </LayoutGroup>
+
+      <div className="relative z-10">
+        <Composer
+          onSend={handleSend}
+          onCancel={chat.abort}
+          isStreaming={isStreaming}
+          attachment={attachment}
+          onAttach={attach}
+          onClearAttachment={clearAttachment}
+        />
+      </div>
+    </div>
   )
 }
 
