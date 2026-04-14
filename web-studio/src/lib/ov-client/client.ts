@@ -3,6 +3,7 @@ import type { InternalAxiosRequestConfig } from 'axios'
 
 import { createClient } from '#/gen/ov-client/client'
 import { client as sdkClient } from '#/gen/ov-client/client.gen'
+import { resolveDefaultBaseUrl } from '#/hooks/app-connection-defaults'
 
 import { normalizeOvClientError, OvClientError } from './errors'
 import { DEFAULT_API_KEY_STORAGE_KEY } from './types'
@@ -25,8 +26,14 @@ const ENV_BASE_URL = typeof import.meta.env.VITE_OV_BASE_URL === 'string'
   : ''
 
 function normalizeBaseUrl(baseUrl?: string): string {
-  const fallback = isBrowser() ? window.location.origin : ''
-  return (baseUrl || ENV_BASE_URL || fallback).trim().replace(/\/+$/, '')
+  if (baseUrl?.trim()) {
+    return baseUrl.trim().replace(/\/+$/, '')
+  }
+
+  return resolveDefaultBaseUrl({
+    browserOrigin: isBrowser() ? window.location.origin : '',
+    envBaseUrl: ENV_BASE_URL,
+  })
 }
 
 function readSessionStorage(key: string): string {

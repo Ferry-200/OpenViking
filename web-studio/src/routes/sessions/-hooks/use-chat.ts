@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import type { ChatStatus, StreamToolCall } from '../-types/chat'
 import type { Message, MessagePart, TextPart, ToolPart } from '../-types/message'
 import { addMessage, sendChatStream, serializeParts } from '../-lib/api'
-import { generateTitle } from '../-lib/generate-title'
 import { parseSseStream } from '../-lib/sse'
-import { setSessionTitle } from './use-session-titles'
+import { SESSIONS_KEY } from './use-sessions'
 
 function generateId(): string {
   return `msg_${crypto.randomUUID().replace(/-/g, '')}`
@@ -82,6 +82,7 @@ export interface UseChatReturn {
 
 export function useChat(options: UseChatOptions): UseChatReturn {
   const { sessionId, initialMessages, persistMessages = true } = options
+  const queryClient = useQueryClient()
 
   const [messages, setMessages] = useState<Message[]>(initialMessages ?? [])
   const [status, setStatus] = useState<ChatStatus>('idle')
@@ -92,8 +93,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [iteration, setIteration] = useState(0)
 
   const abortRef = useRef<AbortController | null>(null)
-  const messagesRef = useRef<Message[]>(messages)
-  messagesRef.current = messages
 
   // Reset state when sessionId changes
   useEffect(() => {
@@ -113,7 +112,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (initialMessages && initialMessages.length > 0 && status !== 'streaming') {
       setMessages(initialMessages)
     }
-  }, [initialMessages]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialMessages, status])
 
   const abort = useCallback(() => {
     abortRef.current?.abort()
@@ -134,8 +133,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const send = useCallback(async (message: string) => {
     if (status === 'streaming') return
 
-    const isFirstExchange = messagesRef.current.length === 0
-
     const userMsg = createUserMessage(message)
     setMessages((prev) => [...prev, userMsg])
     setStatus('streaming')
@@ -153,6 +150,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     let accReasoning = ''
     const accToolCalls: StreamToolCall[] = []
     let lastToolCall: StreamToolCall | null = null
+    const persistUserMessage = persistMessages
+      ? (async () => {
+          try {
+            await addMessage(sessionId, 'user', message)
+            void queryClient.invalidateQueries({ queryKey: SESSIONS_KEY, exact: true })
+            void queryClient.invalidateQueries({ queryKey: [...SESSIONS_KEY, sessionId] })
+          } catch {
+            // Persistence failure is non-blocking
+          }
+        })()
+      : Promise.resolve()
 
     try {
       const response = await sendChatStream(
@@ -231,23 +239,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       // Persist to openviking session (bot doesn't do this automatically)
       if (persistMessages) {
+        await persistUserMessage
         try {
-          // Sequential: user message must precede assistant message
-          await addMessage(sessionId, 'user', message)
           await addMessage(sessionId, 'assistant', undefined, serializeParts(assistantMsg.parts))
+          void queryClient.invalidateQueries({ queryKey: SESSIONS_KEY, exact: true })
+          void queryClient.invalidateQueries({ queryKey: [...SESSIONS_KEY, sessionId] })
         } catch {
           // Persistence failure is non-blocking
         }
-      }
-
-      // Generate session title on first exchange
-      if (sessionId && isFirstExchange) {
-        // Immediate: use first user message as temp title
-        setSessionTitle(sessionId, message.slice(0, 20))
-        // Async: ask AI for a better title
-        generateTitle(message, accContent).then((title) => {
-          if (title) setSessionTitle(sessionId, title)
-        }).catch(() => {/* non-blocking */})
       }
     } catch (err) {
       if (controller.signal.aborted) {
@@ -258,6 +257,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
         setStatus('idle')
       } else {
+        await persistUserMessage
         const msg = err instanceof Error ? err.message : String(err)
         setError(msg)
         setStatus('error')
@@ -265,7 +265,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     } finally {
       abortRef.current = null
     }
-  }, [status, sessionId, persistMessages])
+  }, [status, sessionId, persistMessages, queryClient])
 
   return {
     messages,

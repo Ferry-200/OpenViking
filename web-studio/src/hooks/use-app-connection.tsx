@@ -2,6 +2,7 @@ import * as React from 'react'
 
 import { isOvClientError, ovClient } from '#/lib/ov-client'
 
+import { resolveStoredBaseUrl } from './app-connection-defaults'
 import { detectServerMode, normalizeBaseUrl } from './use-server-mode'
 import type { ServerMode } from './use-server-mode'
 
@@ -104,9 +105,19 @@ export function useAppConnection(): AppConnectionContextValue {
 
 export function AppConnectionProvider({ children }: { children: React.ReactNode }) {
   const storedConnection = React.useMemo(() => readStoredConnection(), [])
+  const initialBaseUrl = React.useMemo(
+    () =>
+      resolveStoredBaseUrl({
+        browserOrigin: isBrowser() ? window.location.origin : '',
+        defaultBaseUrl: DEFAULT_CONNECTION.baseUrl,
+        storedBaseUrl: storedConnection.baseUrl,
+      }),
+    [storedConnection],
+  )
   const [connection, setConnection] = React.useState<ConnectionDraft>({
     ...DEFAULT_CONNECTION,
     ...storedConnection,
+    baseUrl: initialBaseUrl,
     apiKey: ovClient.getConnection().apiKey || storedConnection.apiKey || DEFAULT_CONNECTION.apiKey,
   })
   const [isConnectionDialogOpen, setConnectionDialogOpen] = React.useState(false)

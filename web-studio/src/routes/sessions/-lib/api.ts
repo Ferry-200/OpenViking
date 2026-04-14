@@ -9,7 +9,7 @@ import {
 } from '#/gen/ov-client/sdk.gen'
 import { getOvResult, normalizeOvClientError, ovClient } from '#/lib/ov-client'
 
-import type { BotChatRequest, BotChatResponse } from '../-types/chat'
+import type { BotChatRequest } from '../-types/chat'
 import type { Message, MessagePart } from '../-types/message'
 import type {
   AddMessageResult,
@@ -64,7 +64,7 @@ export async function fetchSessionMessages(sessionId: string): Promise<Message[]
       path: { session_id: sessionId },
     }),
   )
-  const raw = result?.messages
+  const raw = result.messages
   if (!Array.isArray(raw)) return []
   // Each item is Message.to_dict() — { id, role, parts, created_at }
   return raw.filter(
@@ -137,25 +137,6 @@ export async function sendChatStream(
   }
 
   return response
-}
-
-/** Send a non-streaming chat request. */
-export async function sendChat(request: BotChatRequest): Promise<BotChatResponse> {
-  const baseUrl = ovClient.getOptions().baseUrl
-  const response = await fetch(`${baseUrl}/bot/v1/chat`, {
-    method: 'POST',
-    headers: buildFetchHeaders(),
-    body: JSON.stringify(request),
-  })
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw normalizeOvClientError(
-      new Error(`Chat request failed (${response.status}): ${text}`),
-    )
-  }
-
-  return response.json() as Promise<BotChatResponse>
 }
 
 // ---------------------------------------------------------------------------

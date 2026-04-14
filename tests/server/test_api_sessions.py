@@ -25,7 +25,7 @@ def _configure_test_env(monkeypatch, tmp_path):
             {
                 "storage": {
                     "workspace": str(tmp_path / "workspace"),
-                    "agfs": {"backend": "local", "mode": "binding-client"},
+                    "agfs": {"backend": "local"},
                     "vectordb": {"backend": "local"},
                 },
                 "embedding": {
@@ -82,6 +82,23 @@ async def test_list_sessions(client: httpx.AsyncClient):
     assert isinstance(body["result"], list)
 
 
+async def test_list_sessions_includes_title_fields(client: httpx.AsyncClient):
+    create_resp = await client.post("/api/v1/sessions", json={})
+    session_id = create_resp.json()["result"]["session_id"]
+
+    await client.post(
+        f"/api/v1/sessions/{session_id}/messages",
+        json={"role": "user", "content": "List title seed"},
+    )
+
+    resp = await client.get("/api/v1/sessions")
+    assert resp.status_code == 200
+    items = resp.json()["result"]
+    item = next(entry for entry in items if entry["session_id"] == session_id)
+    assert item["title"] == "List title seed"
+    assert item["title_status"] == "provisional"
+
+
 async def test_get_session(client: httpx.AsyncClient):
     create_resp = await client.post("/api/v1/sessions", json={})
     session_id = create_resp.json()["result"]["session_id"]
@@ -91,6 +108,22 @@ async def test_get_session(client: httpx.AsyncClient):
     body = resp.json()
     assert body["status"] == "ok"
     assert body["result"]["session_id"] == session_id
+
+
+async def test_get_session_includes_title_fields(client: httpx.AsyncClient):
+    create_resp = await client.post("/api/v1/sessions", json={})
+    session_id = create_resp.json()["result"]["session_id"]
+
+    await client.post(
+        f"/api/v1/sessions/{session_id}/messages",
+        json={"role": "user", "content": "Detail title seed"},
+    )
+
+    resp = await client.get(f"/api/v1/sessions/{session_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["result"]["title"] == "Detail title seed"
+    assert body["result"]["title_status"] == "provisional"
 
 
 async def test_get_session_context(client: httpx.AsyncClient):

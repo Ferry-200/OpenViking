@@ -10,11 +10,15 @@ export interface TokenUsage {
   total_tokens: number
 }
 
+export type SessionTitleStatus = 'empty' | 'provisional' | 'final'
+
 /** Session list item — GET /api/v1/sessions response items. */
 export interface SessionListItem {
   session_id: string
   uri: string
   is_dir: boolean
+  title: string
+  title_status: SessionTitleStatus
 }
 
 /** Session detail — GET /api/v1/sessions/{id} result. */
@@ -28,6 +32,8 @@ export interface SessionMeta {
   last_commit_at: string
   llm_token_usage: TokenUsage
   embedding_token_usage: { total_tokens: number }
+  title: string
+  title_status: SessionTitleStatus
   pending_tokens: number
   user: UserIdentifier
 }
