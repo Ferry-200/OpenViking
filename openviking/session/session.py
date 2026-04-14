@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import uuid4
 
-from openviking.message import Message, Part
+from openviking.message import Message, Part, TextPart
 from openviking.server.identity import RequestContext, Role
 from openviking.telemetry import get_current_telemetry, tracer
 from openviking.utils.time_utils import get_current_timestamp
@@ -29,6 +29,12 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _ARCHIVE_WAIT_POLL_SECONDS = 0.1
+_TITLE_STATUS_EMPTY = "empty"
+_TITLE_STATUS_PROVISIONAL = "provisional"
+_TITLE_STATUS_FINAL = "final"
+_SESSION_TITLE_MAX_CHARS = 20
+_CJK_RE = re.compile(r"[\u3400-\u9fff]")
+_LATIN_RE = re.compile(r"[A-Za-z]")
 
 
 @dataclass
@@ -88,6 +94,8 @@ class SessionMeta:
             "total_tokens": 0,
         }
     )
+    title: str = ""
+    title_status: str = _TITLE_STATUS_EMPTY
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -100,6 +108,8 @@ class SessionMeta:
             "last_commit_at": self.last_commit_at,
             "llm_token_usage": dict(self.llm_token_usage),
             "embedding_token_usage": dict(self.embedding_token_usage),
+            "title": self.title,
+            "title_status": self.title_status,
         }
 
     @classmethod
@@ -134,6 +144,8 @@ class SessionMeta:
             embedding_token_usage={
                 "total_tokens": embedding_token_usage.get("total_tokens", 0),
             },
+            title=data.get("title", ""),
+            title_status=data.get("title_status", _TITLE_STATUS_EMPTY),
         )
 
 
@@ -179,6 +191,7 @@ class Session:
         self._stats: SessionStats = SessionStats()
         self._meta = SessionMeta(session_id=self.session_id, created_at=get_current_timestamp())
         self._loaded = False
+        self._storage_ready = False
 
         logger.info(f"Session created: {self.session_id} for user {self.user}")
 
@@ -196,6 +209,7 @@ class Session:
                 for line in content.strip().split("\n")
                 if line.strip()
             ]
+            self._storage_ready = True
             logger.info(f"Session loaded: {self.session_id} ({len(self._messages)} messages)")
         except (FileNotFoundError, Exception):
             logger.debug(f"Session {self.session_id} not found, starting fresh")
@@ -237,18 +251,22 @@ class Session:
 
     async def ensure_exists(self) -> None:
         """Materialize session root and messages file if missing."""
+        if self._storage_ready:
+            return
         if await self.exists():
+            self._storage_ready = True
             return
         await self._viking_fs.mkdir(self._session_uri, exist_ok=True, ctx=self.ctx)
         await self._viking_fs.write_file(f"{self._session_uri}/messages.jsonl", "", ctx=self.ctx)
         await self._save_meta()
+        self._storage_ready = True
 
     async def _save_meta(self) -> None:
         """Persist .meta.json to storage."""
         if not self._viking_fs:
             return
         self._meta.updated_at = get_current_timestamp()
-        await self._viking_fs.write_file(
+        await self._viking_fs.atomic_write_file(
             uri=f"{self._session_uri}/.meta.json",
             content=json.dumps(self._meta.to_dict(), ensure_ascii=False),
             ctx=self.ctx,
@@ -259,6 +277,12 @@ class Session:
         if not self._viking_fs:
             return
         run_async(self._save_meta())
+
+    def _ensure_exists_sync(self) -> None:
+        """Sync wrapper for ensure_exists()."""
+        if not self._viking_fs or self._storage_ready:
+            return
+        run_async(self.ensure_exists())
 
     @property
     def messages(self) -> List[Message]:
@@ -317,11 +341,187 @@ class Session:
             self._stats.total_turns += 1
         self._stats.total_tokens += msg.estimated_tokens
 
+        self._ensure_exists_sync()
         self._append_to_jsonl(msg)
 
         self._meta.message_count = len(self._messages)
+        if role == "user":
+            self._maybe_seed_title(parts)
         self._save_meta_sync()
+        if role == "assistant":
+            self._maybe_schedule_title_refinement(msg)
         return msg
+
+    def _maybe_seed_title(self, parts: List[Part]) -> None:
+        """Create a provisional title from the first user message."""
+        if self._meta.title:
+            return
+
+        title = self._extract_title_from_parts(parts, max_chars=_SESSION_TITLE_MAX_CHARS)
+        if not title:
+            return
+
+        self._meta.title = title
+        self._meta.title_status = _TITLE_STATUS_PROVISIONAL
+
+    def _maybe_schedule_title_refinement(self, assistant_message: Message) -> None:
+        """Best-effort async refinement after the first assistant reply persists."""
+        if self._meta.title_status != _TITLE_STATUS_PROVISIONAL:
+            return
+
+        first_user = self._find_first_message("user")
+        first_assistant = self._find_first_message("assistant")
+        if not first_user or not first_assistant or first_assistant.id != assistant_message.id:
+            return
+
+        vlm = get_openviking_config().vlm
+        if not vlm or not vlm.is_available():
+            return
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            logger.debug("No running loop; skipping async session title refinement")
+            return
+
+        loop.create_task(self._refine_title_if_needed())
+
+    async def _refine_title_if_needed(self) -> None:
+        """Replace a provisional title with a refined model-generated one."""
+        if self._meta.title_status != _TITLE_STATUS_PROVISIONAL:
+            return
+
+        first_user = self._find_first_message("user")
+        first_assistant = self._find_first_message("assistant")
+        if not first_user or not first_assistant:
+            return
+
+        user_text = self._extract_title_from_parts(first_user.parts)
+        assistant_text = self._extract_title_from_parts(first_assistant.parts)
+        if not user_text or not assistant_text:
+            return
+
+        refined_title = await self._generate_refined_title(user_text, assistant_text)
+        if not refined_title:
+            return
+
+        latest_meta = await self._read_latest_meta()
+        if latest_meta.title_status != _TITLE_STATUS_PROVISIONAL:
+            return
+
+        latest_meta.title = refined_title
+        latest_meta.title_status = _TITLE_STATUS_FINAL
+        self._meta = latest_meta
+        await self._save_meta()
+
+    async def _generate_refined_title(self, user_text: str, assistant_text: str) -> str:
+        """Generate a short refined title from the first exchange."""
+        vlm = get_openviking_config().vlm
+        if not vlm or not vlm.is_available():
+            return ""
+
+        language_guidance = "Use the same language as the user's first message."
+        if self._contains_cjk(user_text):
+            language_guidance = (
+                "Use the same language as the user's first message. "
+                "The user is speaking Chinese. "
+                "Output 4-12 Chinese characters only. "
+                "Do not use English, pinyin, spaces, punctuation, quotes, or sentence fragments."
+            )
+
+        prompt = "\n".join(
+            [
+                "Generate a concise conversation title.",
+                language_guidance,
+                (
+                    f"Return title only, no quotes, no markdown, "
+                    f"max {_SESSION_TITLE_MAX_CHARS} characters."
+                ),
+                f"User: {user_text[:200]}",
+                f"Assistant: {assistant_text[:300]}",
+            ]
+        )
+
+        try:
+            response = await vlm.get_completion_async(prompt)
+        except Exception as exc:
+            logger.warning(f"Session title refinement failed: {exc}")
+            return ""
+
+        return self._sanitize_title(str(response), user_text=user_text)
+
+    async def _read_latest_meta(self) -> SessionMeta:
+        """Reload the most recent session metadata before overwriting title fields."""
+        if not self._viking_fs:
+            return self._meta
+
+        try:
+            meta_content = await self._viking_fs.read_file(
+                f"{self._session_uri}/.meta.json",
+                ctx=self.ctx,
+            )
+            return SessionMeta.from_dict(json.loads(meta_content))
+        except Exception:
+            return self._meta
+
+    def _find_first_message(self, role: str) -> Optional[Message]:
+        """Find the first message for a given role."""
+        return next((message for message in self._messages if message.role == role), None)
+
+    def _extract_title_from_parts(
+        self,
+        parts: List[Part],
+        max_chars: Optional[int] = None,
+    ) -> str:
+        """Extract normalized text content from message parts."""
+        text = " ".join(
+            part.text.strip()
+            for part in parts
+            if isinstance(part, TextPart) and part.text and part.text.strip()
+        )
+        return self._normalize_title_text(text, max_chars=max_chars)
+
+    def _sanitize_title(self, value: str, user_text: str = "") -> str:
+        """Normalize model output into a safe single-line title."""
+        normalized = self._normalize_title_text(value)
+        normalized = re.sub(r"^(title|标题)\s*[:：-]\s*", "", normalized, flags=re.IGNORECASE)
+        normalized = normalized.strip("`\"'“”‘’")
+        normalized = normalized.lstrip("#*-:： ").strip()
+        normalized = normalized.rstrip(".,;:!?，。；：！？-_/ ")
+
+        if self._contains_cjk(user_text):
+            normalized = re.sub(r"(?<=[\u3400-\u9fff])\s+(?=[\u3400-\u9fff])", "", normalized)
+            if _LATIN_RE.search(normalized):
+                return ""
+
+        return self._truncate_title(normalized, max_chars=_SESSION_TITLE_MAX_CHARS)
+
+    def _normalize_title_text(self, value: str, max_chars: Optional[int] = None) -> str:
+        """Collapse whitespace and optionally truncate by Unicode code point count."""
+        if not value:
+            return ""
+
+        normalized = re.sub(r"\s+", " ", value).strip()
+        if max_chars is not None:
+            normalized = normalized[:max_chars]
+        return normalized
+
+    def _truncate_title(self, value: str, max_chars: int) -> str:
+        """Trim titles without leaving awkward half-words behind."""
+        if len(value) <= max_chars:
+            return value
+
+        truncated = value[:max_chars].rstrip()
+        if " " in truncated:
+            last_space = truncated.rfind(" ")
+            if last_space >= max_chars // 2:
+                truncated = truncated[:last_space]
+
+        return truncated.rstrip(".,;:!?，。；：！？-_/ ")
+
+    def _contains_cjk(self, value: str) -> bool:
+        """Return True when the text contains Chinese/Japanese/Korean ideographs."""
+        return bool(_CJK_RE.search(value or ""))
 
     def update_tool_part(
         self,

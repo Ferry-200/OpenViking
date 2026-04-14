@@ -4,7 +4,6 @@ import { CompassIcon } from 'lucide-react'
 
 import { Thread } from '#/components/chat/thread'
 import { useCreateSession } from './-hooks/use-sessions'
-import { setSessionTitle } from './-hooks/use-session-titles'
 
 export const Route = createFileRoute('/sessions/')({
   component: SessionsPage,
@@ -20,7 +19,6 @@ function SessionsPage() {
 
   const handleNewSession = useCallback(async () => {
     const result = await createSession.mutateAsync(undefined)
-    setSessionTitle(result.session_id, '新会话')
     void navigate({ to: '/sessions', search: { s: result.session_id } })
   }, [createSession, navigate])
 

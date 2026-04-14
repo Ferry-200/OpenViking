@@ -8,13 +8,19 @@ import {
   fetchSessions,
 } from '../-lib/api'
 import type { Message } from '../-types/message'
+import {
+  getSessionListTitlePollInterval,
+  getSessionTitlePollInterval,
+} from './title-polling'
 
-const SESSIONS_KEY = ['sessions'] as const
+export const SESSIONS_KEY = ['sessions'] as const
 
 export function useSessionList() {
   return useQuery({
     queryKey: SESSIONS_KEY,
     queryFn: fetchSessions,
+    refetchInterval: (query) =>
+      getSessionListTitlePollInterval(query.state.data),
     staleTime: 30_000,
   })
 }
@@ -24,6 +30,8 @@ export function useSession(sessionId: string | undefined) {
     queryKey: [...SESSIONS_KEY, sessionId],
     queryFn: () => fetchSession(sessionId!),
     enabled: Boolean(sessionId),
+    refetchInterval: (query) =>
+      getSessionTitlePollInterval(query.state.data),
     staleTime: 15_000,
   })
 }

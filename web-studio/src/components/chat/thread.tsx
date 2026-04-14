@@ -2,9 +2,9 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { CompassIcon } from 'lucide-react'
 
 import { useChat } from '#/routes/sessions/-hooks/use-chat'
-import { useSessionMessages } from '#/routes/sessions/-hooks/use-sessions'
-import { useSessionTitles } from '#/routes/sessions/-hooks/use-session-titles'
+import { useSession, useSessionList, useSessionMessages } from '#/routes/sessions/-hooks/use-sessions'
 import { useFileAttachment } from '#/routes/sessions/-hooks/use-file-attachment'
+import { getSessionDisplayTitle } from '#/routes/sessions/-lib/session-title'
 import { MessageList } from './message-list'
 import { Composer } from './composer'
 
@@ -15,10 +15,17 @@ interface ThreadProps {
 }
 
 export function Thread({ sessionId }: ThreadProps) {
-  const { getTitle } = useSessionTitles()
-  const title = getTitle(sessionId)
-
+  const { data: sessionMeta } = useSession(sessionId)
+  const { data: sessions } = useSessionList()
   const { data: historyMessages } = useSessionMessages(sessionId)
+  const sessionEntry = sessions?.find((session) => session.session_id === sessionId)
+  const title = getSessionDisplayTitle({
+    session_id: sessionId,
+    title: sessionMeta?.title ?? '',
+  }, {
+    fallbackTitle: sessionEntry?.title,
+    untitledLabel: '新会话',
+  })
 
   const chat = useChat({
     sessionId,

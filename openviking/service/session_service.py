@@ -6,11 +6,12 @@ Session Service for OpenViking.
 Provides session management operations: session, sessions, add_message, commit, delete.
 """
 
+import json
 from typing import Any, Dict, List, Optional
 
 from openviking.server.identity import RequestContext
 from openviking.service.task_tracker import get_task_tracker
-from openviking.session import Session
+from openviking.session import Session, SessionMeta
 from openviking.session.compressor import SessionCompressor
 from openviking.storage import VikingDBManager
 from openviking.storage.viking_fs import VikingFS
@@ -122,11 +123,22 @@ class SessionService:
                 name = entry.get("name", "")
                 if name in [".", ".."]:
                     continue
+                meta = SessionMeta(session_id=name)
+                try:
+                    meta_content = await self._viking_fs.read_file(
+                        f"{session_base_uri}/{name}/.meta.json",
+                        ctx=ctx,
+                    )
+                    meta = SessionMeta.from_dict(json.loads(meta_content))
+                except Exception:
+                    pass
                 sessions.append(
                     {
                         "session_id": name,
                         "uri": f"{session_base_uri}/{name}",
                         "is_dir": entry.get("isDir", False),
+                        "title": meta.title,
+                        "title_status": meta.title_status,
                     }
                 )
             return sessions

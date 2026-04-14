@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from 'next-themes'
+import { toast } from 'sonner'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '#/components/ui/collapsible'
 import { ConnectionDialog } from '#/components/connection-dialog'
@@ -55,7 +56,7 @@ import { AppConnectionProvider, useAppConnection } from '#/hooks/use-app-connect
 import { ResourceUploadProvider } from '#/hooks/use-resource-upload'
 import { describeServerMode } from '#/hooks/use-server-mode'
 import { useSessionList, useCreateSession, useDeleteSession } from '#/routes/sessions/-hooks/use-sessions'
-import { useSessionTitles, setSessionTitle, removeSessionTitle } from '#/routes/sessions/-hooks/use-session-titles'
+import { getSessionDisplayTitle } from '#/routes/sessions/-lib/session-title'
 
 type NavItem = {
   icon: React.ComponentType
@@ -194,14 +195,14 @@ function NavSessionsItem({ pathname, title }: { pathname: string; title: string 
   const navigate = useNavigate()
   const isActive = pathname === '/sessions' || pathname.startsWith('/sessions/')
   const [open, setOpen] = React.useState(isActive)
+  const { openConnectionDialog } = useAppConnection()
 
   const { data: sessions, isLoading } = useSessionList()
-  const { getTitle } = useSessionTitles()
   const createSession = useCreateSession()
   const deleteSession = useDeleteSession()
 
   const activeSessionId = useRouterState({
-    select: (s) => (s.location.search as Record<string, string>)?.s ?? null,
+    select: (s) => (s.location.search as { s?: string }).s ?? null,
   })
 
   React.useEffect(() => {
@@ -209,17 +210,21 @@ function NavSessionsItem({ pathname, title }: { pathname: string; title: string 
   }, [isActive])
 
   const handleNewSession = React.useCallback(async () => {
-    const result = await createSession.mutateAsync(undefined)
-    setSessionTitle(result.session_id, '新会话')
-    void navigate({ to: '/sessions', search: { s: result.session_id } })
-  }, [createSession, navigate])
+    try {
+      const result = await createSession.mutateAsync(undefined)
+      void navigate({ to: '/sessions', search: { s: result.session_id } })
+    } catch (error) {
+      openConnectionDialog()
+      const message = error instanceof Error ? error.message : 'Failed to create session'
+      toast.error(message)
+    }
+  }, [createSession, navigate, openConnectionDialog])
 
   const handleDeleteSession = React.useCallback(
     async (e: React.MouseEvent, id: string) => {
       e.stopPropagation()
       e.preventDefault()
       await deleteSession.mutateAsync(id)
-      removeSessionTitle(id)
       if (activeSessionId === id) {
         void navigate({ to: '/sessions', search: { s: undefined } as { s?: string } })
       }
@@ -262,7 +267,9 @@ function NavSessionsItem({ pathname, title }: { pathname: string; title: string 
               </SidebarMenuSubItem>
             ) : (
               reversedSessions.map((s) => {
-                const sessionTitle = getTitle(s.session_id)
+                const sessionTitle = getSessionDisplayTitle(s, {
+                  untitledLabel: '新会话',
+                })
                 const isSessionActive = activeSessionId === s.session_id
 
                 return (

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import PurePath
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from uuid import uuid4
 
 from openviking.pyagfs.exceptions import AGFSClientError, AGFSHTTPError
 from openviking.server.identity import RequestContext, Role
@@ -1722,6 +1723,88 @@ class VikingFS:
 
         content = await self._encrypt_content(content, ctx=ctx)
         self.agfs.write(path, content)
+
+    async def atomic_write_file(
+        self,
+        uri: str,
+        content: Union[str, bytes],
+        ctx: Optional[RequestContext] = None,
+    ) -> None:
+        """Write a file through a same-directory temp file and raw rename.
+
+        On backends that support rename-overwrite (for example localfs),
+        the final replacement is atomic. Backends that reject renaming onto
+        an existing target fall back to rotating the previous file aside
+        first, preserving the old content instead of rewriting it in place.
+        """
+        self._ensure_access(uri, ctx)
+        path = self._uri_to_path(uri, ctx=ctx)
+        await self._ensure_parent_dirs(path)
+
+        if isinstance(content, str):
+            content = content.encode("utf-8")
+
+        content = await self._encrypt_content(content, ctx=ctx)
+        unique_suffix = uuid4().hex
+        tmp_path = f"{path}.tmp.{unique_suffix}"
+        backup_path = f"{path}.bak.{unique_suffix}"
+        cleanup_tmp = False
+
+        self.agfs.write(tmp_path, content)
+
+        try:
+            self.agfs.mv(tmp_path, path)
+            return
+        except Exception as rename_error:
+            cleanup_tmp = True
+            rename_message = str(rename_error).lower()
+            target_exists = False
+
+            try:
+                self.agfs.stat(path)
+                target_exists = True
+            except Exception:
+                target_exists = False
+
+            if not (target_exists and ("exist" in rename_message or "already" in rename_message)):
+                raise
+
+            self.agfs.mv(path, backup_path)
+
+            try:
+                self.agfs.mv(tmp_path, path)
+                cleanup_tmp = False
+            except Exception:
+                restored = False
+                try:
+                    self.agfs.mv(backup_path, path)
+                    restored = True
+                except Exception as restore_error:
+                    cleanup_tmp = False
+                    logger.error(
+                        "[VikingFS] Failed to restore original file after atomic write failed: %s (%s)",
+                        path,
+                        restore_error,
+                    )
+                else:
+                    cleanup_tmp = restored
+                raise
+            else:
+                try:
+                    self.agfs.rm(backup_path)
+                except Exception as cleanup_error:
+                    logger.warning(
+                        "[VikingFS] Failed to remove atomic write backup file %s: %s",
+                        backup_path,
+                        cleanup_error,
+                    )
+                return
+        finally:
+            if cleanup_tmp:
+                try:
+                    self.agfs.rm(tmp_path)
+                except Exception:
+                    pass
 
     async def read_file(
         self,
