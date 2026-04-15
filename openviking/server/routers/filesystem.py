@@ -23,7 +23,73 @@ router = APIRouter(
 )
 
 
-@router.get("/ls", response_model=Response[FSListResult])
+_FSLIST_EXAMPLES = {
+    "simple": {
+        "summary": "simple=true — list of URI strings",
+        "description": (
+            "When the request sets ``simple=true`` the response "
+            "``result`` is a flat list of URI strings. Use this mode "
+            "when only paths are needed."
+        ),
+        "value": {
+            "status": "ok",
+            "result": [
+                "viking://resources/docs/intro.md",
+                "viking://resources/docs/architecture.md",
+            ],
+        },
+    },
+    "detailed": {
+        "summary": "simple=false (default) — list of FileStat entries",
+        "description": (
+            "When the request leaves ``simple`` unset or sets it to "
+            "``false`` the response ``result`` is a list of FileStat "
+            "objects. Fields that AGFS did not populate for the entry "
+            "are omitted from the object."
+        ),
+        "value": {
+            "status": "ok",
+            "result": [
+                {
+                    "name": "intro.md",
+                    "size": 1024,
+                    "mode": 644,
+                    "modTime": "2026-04-10T12:30:00Z",
+                    "isDir": False,
+                    "uri": "viking://resources/docs/intro.md",
+                    "rel_path": "docs/intro.md",
+                    "abstract": "Overview of the platform",
+                },
+                {
+                    "name": "architecture",
+                    "size": 0,
+                    "mode": 755,
+                    "modTime": "2026-04-09T08:00:00Z",
+                    "isDir": True,
+                    "uri": "viking://resources/docs/architecture",
+                    "rel_path": "docs/architecture",
+                },
+            ],
+        },
+    },
+}
+
+_FSLIST_RESPONSES = {
+    200: {
+        "description": (
+            "Polymorphic response: ``List[str]`` when the request sets "
+            "``simple=true``, otherwise ``List[FileStat]``."
+        ),
+        "content": {"application/json": {"examples": _FSLIST_EXAMPLES}},
+    }
+}
+
+
+@router.get(
+    "/ls",
+    response_model=Response[FSListResult],
+    responses=_FSLIST_RESPONSES,
+)
 async def ls(
     uri: str = Query(..., description="Viking URI"),
     simple: bool = Query(False, description="Return only relative path list"),
@@ -55,7 +121,11 @@ async def ls(
     return Response(status="ok", result=result)
 
 
-@router.get("/tree", response_model=Response[FSListResult])
+@router.get(
+    "/tree",
+    response_model=Response[FSListResult],
+    responses=_FSLIST_RESPONSES,
+)
 async def tree(
     uri: str = Query(..., description="Viking URI"),
     output: str = Query("agent", description="Output format: original or agent"),
