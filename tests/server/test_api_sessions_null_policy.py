@@ -12,10 +12,17 @@ rollout:
 3. Commit, extract, and detail endpoints — the three endpoints whose null
    behavior changed — emit bytes-compatible output with historical callers.
 
-The tests deliberately avoid the full ``tests/server/conftest.py`` fixtures
-(real OpenVikingService + AGFS). They build a minimal FastAPI app using the
-sessions router with dependency overrides so the null policy can be
-verified in isolation from storage and auth.
+The tests build a minimal FastAPI app using the sessions router with
+dependency overrides so the null policy can be verified in isolation from
+storage and auth — no fixture from ``tests/server/conftest.py`` is used
+and no real ``OpenVikingService`` / AGFS / RAGFS is started.
+
+Note that pytest still loads every ancestor ``conftest.py`` at collection
+time, which means the project's root ``tests/conftest.py`` imports are
+evaluated. These imports require the full project install profile
+(``openviking[dev]`` + bot extras); a partial environment that cannot
+satisfy them will fail *before* these tests run, independent of the
+tests themselves.
 """
 
 from __future__ import annotations

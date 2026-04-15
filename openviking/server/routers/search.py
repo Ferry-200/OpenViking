@@ -203,10 +203,10 @@ async def grep(
         node_limit=request.node_limit,
         level_limit=request.level_limit,
     )
-    return Response(
-        status="ok",
-        result=GrepResult.model_validate(result) if isinstance(result, dict) else GrepResult(),
-    )
+    # ``service.fs.grep`` is expected to return a dict (AGFS contract).
+    # Trust the contract and let Pydantic surface any shape violation so a
+    # silent fallback cannot swallow a polymorphic upstream response.
+    return Response(status="ok", result=GrepResult.model_validate(result))
 
 
 @router.post("/glob", response_model=Response[GlobResult])
@@ -219,7 +219,5 @@ async def glob(
     result = await service.fs.glob(
         request.pattern, ctx=_ctx, uri=request.uri, node_limit=request.node_limit
     )
-    return Response(
-        status="ok",
-        result=GlobResult.model_validate(result) if isinstance(result, dict) else GlobResult(),
-    )
+    # See ``grep`` above — no silent fallback to an empty ``GlobResult``.
+    return Response(status="ok", result=GlobResult.model_validate(result))

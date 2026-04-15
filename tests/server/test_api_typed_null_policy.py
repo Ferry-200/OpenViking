@@ -9,6 +9,12 @@ the content and search routers.
 Bot proxy endpoints are covered by upstream vikingbot tests; they are not
 retested here because the server-side behavior is pure passthrough of
 ``response.json()`` into mirror models.
+
+Like ``test_api_sessions_null_policy.py``, this module only overrides
+FastAPI dependencies — it does not instantiate any fixture from the
+heavy ``tests/server/conftest.py``. pytest still loads parent
+``conftest.py`` modules at collection; a partial environment that can't
+satisfy their imports will fail before any test runs here.
 """
 
 from __future__ import annotations
