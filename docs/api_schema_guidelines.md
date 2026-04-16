@@ -86,8 +86,11 @@ router = APIRouter(
 )
 ```
 
-Individual endpoints may override to `False` when `null` carries semantic
-meaning (rare), but the router-level default stays `True`.
+Endpoints that **must** emit explicit `null` keys (rare — e.g. a field
+whose absence vs `null` carries different semantic meaning) cannot
+override per-endpoint within the same router because `ExcludeNoneRoute`
+unconditionally sets the flag. Move such endpoints to a separate router
+that does not use `ExcludeNoneRoute`.
 
 ## 4. Non-JSON responses are whitelisted
 
@@ -129,20 +132,19 @@ follow-up done per-feature.
 Module-specific models live in `openviking/server/schemas/<module>.py`;
 primitives reused across modules live in `openviking/server/schemas/common.py`.
 
-### Mapping historical list payloads to `PaginatedResult`
+### Mapping historical list payloads
 
 Existing list endpoints historically return ad-hoc shapes such as
 `{"items": [...], "total": N}`, `{"items": [...]}`, or
 `{"results": [...], "offset": o, "limit": l}`. When typing these endpoints,
 follow this policy to stay backward-compatible:
 
-- **Preserve existing top-level field names.** If the endpoint currently
-  returns `{"items": [...], "total": N}`, the typed response is
-  `Response[PaginatedResult[Item]]` with `items=[...]` and
-  `pagination=Pagination(total=N, limit=..., offset=...)` — this adds a new
-  `pagination` sub-object **only when the endpoint actually exposes
-  offset/limit/has_more**. If it never did, `pagination` stays `None` and is
-  omitted by `ExcludeNoneRoute`.
+- **Use a custom model that mirrors the historical shape.** Do **not**
+  force-fit existing payloads into `PaginatedResult[T]` if that would
+  move or rename top-level fields (e.g. moving a bare `total` into a
+  `pagination` sub-object is a breaking change). `PaginatedResult[T]`
+  is provided for **new** endpoints or explicit migrations where both
+  client and server can be updated together.
 - **Never rename historical fields.** If the endpoint returns `results`
   (not `items`), the PR introduces a module-local model that preserves
   `results`; don't rewrite the shape.
